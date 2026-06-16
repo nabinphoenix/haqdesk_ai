@@ -27,7 +27,7 @@ class MessagingService:
         logger.info(f"[FACEBOOK SEND] Token (first 20): {access_token[:20] if access_token else 'MISSING'}...")
         logger.info(f"[FACEBOOK SEND] Payload: {payload}")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, params=params)
             result = response.json()
             logger.info(f"[FACEBOOK SEND] Meta response (HTTP {response.status_code}): {result}")
@@ -59,7 +59,7 @@ class MessagingService:
         logger.info(f"[INSTAGRAM SEND] Token (first 20): {access_token[:20] if access_token else 'MISSING'}...")
         logger.info(f"[INSTAGRAM SEND] Payload: {payload}")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, params=params)
             result = response.json()
             logger.info(f"[INSTAGRAM SEND] Meta response (HTTP {response.status_code}): {result}")
@@ -86,7 +86,7 @@ class MessagingService:
         logger.info(f"[WHATSAPP SEND] Recipient: {to}, PhoneNumberID: {phone_number_id}")
         logger.info(f"[WHATSAPP SEND] Token (first 20): {access_token[:20] if access_token else 'MISSING'}...")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, headers=headers)
             result = response.json()
             logger.info(f"[WHATSAPP SEND] Meta response (HTTP {response.status_code}): {result}")

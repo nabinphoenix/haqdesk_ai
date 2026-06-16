@@ -137,7 +137,8 @@ export default function InboxPage() {
             const token = localStorage.getItem("token");
             console.log("Token:", token);
             const response = await fetch(
-                `${API_URL}/api/v1/inbox/conversations?token=${token}`
+                `${API_URL}/api/v1/inbox/conversations?token=${token}&t=${Date.now()}`,
+                { cache: "no-store" }
             );
             
             if (response.status === 401) {
@@ -174,7 +175,7 @@ export default function InboxPage() {
         setIsAuth(true);
         fetchConversations();
         
-        const interval = setInterval(fetchConversations, 10000);
+        const interval = setInterval(fetchConversations, 3000);
         
         // Listen for link events to immediately refresh list
         const handleLinkEvent = () => fetchConversations();

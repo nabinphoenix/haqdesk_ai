@@ -35,12 +35,9 @@ async def get_conversations(
     db: Session = Depends(get_db)
 ):
     """Fetch conversations filtered by the logged-in user's business_id"""
-    print(f"Token received: {token[:20] if token else 'None'}...")
     current_user = None
     if token:
         current_user = await get_current_user(token, db)
-    print(f"Current user: {current_user}")
-    print(f"User business_id: {current_user.business_id if current_user else 'None'}")
     
     if not current_user:
         raise HTTPException(status_code=401, detail="Token expired or invalid")
@@ -203,7 +200,7 @@ async def reply_to_conversation(
     if integration:
         access_token = integration.access_token
         metadata = integration.metadata_json or {}
-        print(f"[REPLY] Found integration for platform '{integration.platform}'. Token (first 20): {access_token[:20] if access_token else 'NONE'}...")
+        print(f"[REPLY] Found integration for platform '{integration.platform}'.")
     else:
         # Fallback to .env settings
         print(f"[REPLY] No DB integration found — using .env fallback for platform '{customer.platform}'")
@@ -219,7 +216,7 @@ async def reply_to_conversation(
             metadata = {"phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID}
     
     print(f"[REPLY] Platform: {customer.platform} | Recipient IGSID/PSID: {customer.platform_user_id}")
-    print(f"[REPLY] Final token (first 20): {access_token[:20] if access_token else 'MISSING'}...")
+
     
     if not access_token:
         raise HTTPException(status_code=400, detail=f"No active integration or fallback token found for {customer.platform}")

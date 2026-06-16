@@ -93,9 +93,17 @@ FYP/
 
 ## 7. Upcoming Milestones (What's Next?)
 
-### **Phase 1: Knowledge & RAG Integration**
-- **Knowledge Base**: Build the interface to upload PDFs/Docs.
-- **RAG Engine**: Integrate FAISS or PGVector to allow the AI to "read" your business documents and suggest replies to agents.
+### **Phase 1: Knowledge & RAG Integration (Implemented)**
+- **RAG Pipeline**:
+  - Document ingestion: PDF, DOCX, TXT via PyMuPDF and pypdf
+  - Text chunking: LangChain RecursiveCharacterTextSplitter (500 chars, 50 overlap)
+  - Embeddings: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384-dim)
+  - Vector storage: PostgreSQL + pgvector extension
+  - Retrieval: cosine similarity search, top-k chunks per business
+  - Generation: Groq API with llama-3.3-70b-versatile
+  - Multi-tenant: each business has isolated knowledge base
+  - Auto-draft: incoming customer messages trigger background RAG pipeline
+  - Human-in-loop: staff review/approve all AI drafts before sending
 
 ### **Phase 2: Analytics & Telemetry**
 - **Live Stats**: Visualize message volume, response times, and agent performance on the `/analytics` page.

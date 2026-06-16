@@ -107,7 +107,10 @@ export default function ChatWindow({
         if (!conversationId) return;
         const token = localStorage.getItem("token");
         try {
-            const res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/messages?token=${token}`);
+            const res = await fetch(
+                `${API_URL}/api/v1/inbox/conversations/${conversationId}/messages?token=${token}&t=${Date.now()}`,
+                { cache: "no-store" }
+            );
             if (!res.ok) return;
             const data = await res.json();
             const formatted: Message[] = data.map((m: any) => ({
@@ -203,11 +206,11 @@ export default function ChatWindow({
 
         try {
             let res: Response;
-            if (platform?.toLowerCase() === "whatsapp" && customerId) {
-                res = await fetch(`${API_URL}/api/v1/whatsapp/send`, {
+            if (platform?.toLowerCase() === "whatsapp") {
+                res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ to: customerId, message: text }),
+                    body: JSON.stringify({ content: text, token }),
                 });
             } else {
                 res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {

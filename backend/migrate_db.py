@@ -137,6 +137,34 @@ def migrate():
     # Step 2: Create all new tables (knowledge_documents, knowledge_chunks, etc.)
     print("Creating new tables...")
     Base.metadata.create_all(bind=engine)
+    
+    # Create indexes safely
+    with engine.connect() as conn:
+        indexes = [
+            """CREATE INDEX IF NOT EXISTS ix_messages_conversation_timestamp 
+               ON messages (conversation_id, timestamp)""",
+            
+            """CREATE INDEX IF NOT EXISTS ix_conversations_business_created 
+               ON conversations (business_id, created_at DESC)""",
+            
+            """CREATE INDEX IF NOT EXISTS ix_customers_business_platform 
+               ON customers (business_id, platform, platform_user_id)""",
+            
+            """CREATE INDEX IF NOT EXISTS ix_knowledge_documents_business 
+               ON knowledge_documents (business_id)""",
+            
+            """CREATE INDEX IF NOT EXISTS ix_knowledge_chunks_business_document 
+               ON knowledge_chunks (business_id, document_id)""",
+        ]
+        for idx_sql in indexes:
+            try:
+                conn.execute(text(idx_sql))
+                conn.commit()
+                print("Index created.")
+            except Exception as e:
+                conn.rollback()
+                print(f"Index skipped: {e}")
+
     print("[SUCCESS] Migration completed successfully!")
 
 

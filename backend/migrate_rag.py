@@ -10,8 +10,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.integration import Integration
 from app.models.customer_identity import CustomerIdentity
-from app.models.knowledge_document import KnowledgeDocument
-from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 
 def migrate():
     engine = create_engine(settings.DATABASE_URL)
