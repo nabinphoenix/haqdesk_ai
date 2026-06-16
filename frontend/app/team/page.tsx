@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface TeamMember {
   id: number;
   name: string;
@@ -66,7 +68,7 @@ export default function TeamPage() {
       try {
         const token = localStorage.getItem("token");
         if (!token) return;
-        const res = await fetch("http://localhost:8000/api/v1/team/members", {
+        const res = await fetch(`${API_URL}/api/v1/team/members`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -100,7 +102,7 @@ export default function TeamPage() {
     if (!member) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/team/members/${id}`, {
+      const res = await fetch(`${API_URL}/api/v1/team/members/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -122,7 +124,7 @@ export default function TeamPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/v1/team/invite", {
+      const res = await fetch(`${API_URL}/api/v1/team/invite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

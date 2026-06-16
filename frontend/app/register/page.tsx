@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -31,7 +33,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/v1/auth/register", {
+      const response = await fetch(`${API_URL}/api/v1/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -212,7 +214,7 @@ export default function RegisterPage() {
           {/* Google Sign‑In (coming soon) */}
           <button
             type="button"
-            onClick={() => (window.location.href = "http://localhost:8000/api/v1/auth/google")}
+            onClick={() => (window.location.href = `${API_URL}/api/v1/auth/google`)}
             className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border text-[12px] font-medium transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.98]"
             style={{
               borderColor: "var(--border)",

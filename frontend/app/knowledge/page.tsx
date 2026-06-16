@@ -8,6 +8,8 @@ import {
   BookOpen, ChevronRight, Zap, Eye,
 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface KnowledgeDoc {
   id: number;
   filename: string;
@@ -39,9 +41,9 @@ export default function KnowledgeBase() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = async () => {
-    const userBusinessId = localStorage.getItem("userBusinessId") || "1";
+    const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/knowledge/documents/${userBusinessId}`);
+      const response = await fetch(`${API_URL}/api/v1/knowledge/documents?token=${token}`);
       if (response.ok) {
         const data = await response.json();
         setDocuments(data);
@@ -77,9 +79,9 @@ export default function KnowledgeBase() {
     formData.append("file", file);
     try {
       setUploadProgress(30);
-      const userBusinessId = localStorage.getItem("userBusinessId") || "1";
+      const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:8000/api/v1/knowledge/upload/${userBusinessId}`,
+        `${API_URL}/api/v1/knowledge/upload?token=${token}`,
         { method: "POST", body: formData }
       );
       setUploadProgress(70);
@@ -116,7 +118,8 @@ export default function KnowledgeBase() {
     e.stopPropagation();
     if (!confirm("Delete this document and all its indexed data?")) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/knowledge/documents/${id}`, { method: "DELETE" });
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_URL}/api/v1/knowledge/documents/${id}?token=${token}`, { method: "DELETE" });
       if (response.ok) {
         setDocuments(prev => prev.filter(doc => doc.id !== id));
         if (selectedDoc?.id === id) setSelectedDoc(null);
@@ -130,11 +133,11 @@ export default function KnowledgeBase() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const userBusinessId = localStorage.getItem("userBusinessId") || "1";
-      const response = await fetch("http://localhost:8000/api/v1/knowledge/query", {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_URL}/api/v1/knowledge/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: queryText, business_id: parseInt(userBusinessId) }),
+        body: JSON.stringify({ question: queryText, token: token }),
       });
       if (response.ok) setQueryResult(await response.json());
     } catch { console.error("Query failed"); }

@@ -94,6 +94,26 @@ async def get_messages(
     token: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
+    # Get current user
+    current_user = None
+    if token:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            email = payload.get("sub")
+            current_user = db.query(User).filter(User.email == email).first()
+        except:
+            pass
+
+    # Get conversation
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # IDOR fix — verify ownership
+    if current_user and current_user.business_id:
+        if conversation.business_id != current_user.business_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
     messages = db.query(Message).filter(
         Message.conversation_id == conversation_id
     ).order_by(Message.timestamp.asc()).all()
@@ -126,27 +146,38 @@ async def get_messages(
 
 @router.post("/conversations/{conversation_id}/reply")
 async def reply_to_conversation(
-    conversation_id: int, 
-    content: str = Body(..., embed=True), 
-    token: Optional[str] = Body(None, embed=True), 
+    conversation_id: int,
+    content: str = Body(..., embed=True),
+    token: Optional[str] = Body(None, embed=True),
     db: Session = Depends(get_db)
 ):
-    """Send a reply and log which agent responded"""
-    # 1. Get conversation and customer details
+    # Require auth first
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email = payload.get("sub")
+        current_user = db.query(User).filter(User.email == email).first()
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token expired")
+
     conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-        
+
+    # Ownership check
+    if current_user.business_id and conv.business_id != current_user.business_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # rest of reply logic, use current_user.id as agent_id
+    agent_id = current_user.id
+
     customer = db.query(Customer).filter(Customer.id == conv.customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-        
-    # 2. Get the agent from token
-    agent_id = None
-    if token:
-        user = await get_current_user(token, db)
-        if user:
-            agent_id = user.id
 
     # 3. Get Integration details for token
     # NOTE: Instagram replies use the FACEBOOK Page Access Token (not INSTAGRAM_ACCESS_TOKEN).

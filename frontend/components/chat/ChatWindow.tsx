@@ -16,6 +16,8 @@ import {
     CheckCheck,
 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Message {
     id: number;
@@ -105,7 +107,7 @@ export default function ChatWindow({
         if (!conversationId) return;
         const token = localStorage.getItem("token");
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/inbox/conversations/${conversationId}/messages?token=${token}`);
+            const res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/messages?token=${token}`);
             if (!res.ok) return;
             const data = await res.json();
             const formatted: Message[] = data.map((m: any) => ({
@@ -202,13 +204,13 @@ export default function ChatWindow({
         try {
             let res: Response;
             if (platform?.toLowerCase() === "whatsapp" && customerId) {
-                res = await fetch("http://localhost:8000/api/v1/whatsapp/send", {
+                res = await fetch(`${API_URL}/api/v1/whatsapp/send`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ to: customerId, message: text }),
                 });
             } else {
-                res = await fetch(`http://localhost:8000/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {
+                res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ content: text, token }),

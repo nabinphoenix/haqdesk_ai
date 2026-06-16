@@ -117,6 +117,8 @@ function relativeTime(raw: string) {
     return `${Math.floor(diff / 86400)}d`;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 // ══════════════════════════════════════════════════════════════════════════════
 export default function InboxPage() {
     const router = useRouter();
@@ -135,7 +137,7 @@ export default function InboxPage() {
             const token = localStorage.getItem("token");
             console.log("Token:", token);
             const response = await fetch(
-                `http://localhost:8000/api/v1/inbox/conversations?token=${token}`
+                `${API_URL}/api/v1/inbox/conversations?token=${token}`
             );
             
             if (response.status === 401) {

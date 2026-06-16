@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import SocialIcon from "../ui/SocialIcon";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface CustomerProfile {
     id: number;
     display_name: string;
@@ -54,7 +56,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
     const fetchCustomerData = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`http://localhost:8000/api/v1/customers/${customerId}`, {
+            const res = await fetch(`${API_URL}/api/v1/customers/${customerId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -70,7 +72,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
     const fetchConversations = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`http://localhost:8000/api/v1/customers/${customerId}/conversations`, {
+            const res = await fetch(`${API_URL}/api/v1/customers/${customerId}/conversations`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -85,7 +87,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
         setIsSaving(true);
         try {
             const token = localStorage.getItem("token");
-            await fetch(`http://localhost:8000/api/v1/customers/${customerId}/notes`, {
+            await fetch(`${API_URL}/api/v1/customers/${customerId}/notes`, {
                 method: "POST",
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -107,7 +109,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
         try {
             const token = localStorage.getItem("token");
             const res = await fetch(
-                `http://localhost:8000/api/v1/customers/${customerId}/create_and_link`,
+                `${API_URL}/api/v1/customers/${customerId}/create_and_link`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

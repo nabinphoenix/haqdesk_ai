@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertCircle, Eye, EyeOff, CheckCircle2, UserPlus, Shield, Loader2 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 function AcceptInviteContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -38,7 +40,7 @@ function AcceptInviteContent() {
         const validateToken = async () => {
             try {
                 const res = await fetch(
-                    `http://localhost:8000/api/v1/team/validate-invite?token=${encodeURIComponent(token)}`
+                    `${API_URL}/api/v1/team/validate-invite?token=${encodeURIComponent(token)}`
                 );
                 const data = await res.json();
                 if (res.ok) {
@@ -74,7 +76,7 @@ function AcceptInviteContent() {
         setLoading(true);
 
         try {
-            const res = await fetch("http://localhost:8000/api/v1/team/accept-invite", {
+            const res = await fetch(`${API_URL}/api/v1/team/accept-invite`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token, name, email, password }),

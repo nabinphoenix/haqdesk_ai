@@ -1,15 +1,15 @@
-# Tasks: Integrate RAG Pipeline
+[x] business_id extracted from JWT token not frontend
+[x] IDOR bug fixed in messages endpoint
+[x] Reply endpoint requires auth before action
+[x] Registration prevents tenant takeover
+[x] Background task uses own DB session
+[x] Config removes insecure defaults
+[x] Frontend API URLs moved to environment variable
+[x] Knowledge page removes business_id fallback to "1"
 
-- [x] RAG pipeline migration - knowledge_documents and knowledge_chunks tables created
-- [x] pgvector extension enabled
-- [x] rag_service.py import paths fixed
-- [x] knowledge.py router fully wired to rag_service
-- [x] KnowledgeDocument model updated with status and business_id fields
-- [x] KnowledgeChunk model updated with business_id field
-
-- [ ] Test upload via /docs with a real PDF
-- [ ] Confirm status changes from processing to ready after upload
-- [ ] Verify generate-draft returns a draft when PDF is uploaded
-- [ ] Wire draft reply into MessageBubble in frontend inbox
-- [ ] Add BERT sentiment detection
-- [ ] Add Nepali language detection and mirrored replies
+[ ] Agent registration by business admin
+[ ] Agent email invitation
+[ ] BERT sentiment detection
+[ ] JWT in URL replaced with Authorization header
+[ ] Database FK constraints added
+[ ] Backend file upload size/MIME validation

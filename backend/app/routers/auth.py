@@ -180,27 +180,30 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
     business_name = payload.get('business_name') or payload.get('businessName')
 
     if not all([name, email, password]):
-        raise HTTPException(status_code=400, detail='Missing name, email, or password')
+        raise HTTPException(status_code=400, detail='Missing required fields')
 
     existing = db.query(User).filter(User.email == email).first()
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
 
-    # Create business if business_name provided
     business_id = None
     if business_name:
         from app.models.business import Business
+        # SECURITY FIX: always create NEW business, never attach to existing
+        # This prevents tenant takeover via registration
         existing_business = db.query(Business).filter(
             Business.name == business_name
         ).first()
         if existing_business:
-            business_id = existing_business.id
-        else:
-            new_business = Business(name=business_name)
-            db.add(new_business)
-            db.commit()
-            db.refresh(new_business)
-            business_id = new_business.id
+            raise HTTPException(
+                status_code=400,
+                detail='A business with this name already exists. Contact the business admin for an invitation.'
+            )
+        new_business = Business(name=business_name)
+        db.add(new_business)
+        db.commit()
+        db.refresh(new_business)
+        business_id = new_business.id
 
     hashed_password = hash_password(password)
     new_user = User(

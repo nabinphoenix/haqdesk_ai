@@ -1,26 +1,66 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 import tempfile
 import os
 import uuid
+from jose import JWTError, jwt
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.services.rag_service import rag_service
+from app.core.config import settings
+from app.models.user import User
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
+def get_business_id_from_token(token: Optional[str] = None, db: Session = Depends(get_db)) -> int:
+    """Extract business_id from JWT token. Never trust frontend."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        if not user.business_id:
+            raise HTTPException(status_code=403, detail="No business associated with this account")
+        return user.business_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token expired or invalid")
+
+
+def run_ingestion_with_new_session(tmp_path, filename, document_id, business_id):
+    db = SessionLocal()
+    try:
+        rag_service.ingest_document(
+            file_path=tmp_path,
+            filename=filename,
+            document_id=document_id,
+            business_id=business_id,
+            db=db
+        )
+    except Exception as e:
+        print(f"Ingestion failed: {e}")
+    finally:
+        db.close()
+
+
 # --- Upload document ---
-@router.post("/upload/{business_id}")
+@router.post("/upload")
 async def upload_document(
-    business_id: int,
     file: UploadFile = File(...),
+    token: Optional[str] = None,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
+    business_id = get_business_id_from_token(token, db)
+    
     allowed = ["pdf", "docx", "txt"]
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in allowed:
@@ -42,12 +82,11 @@ async def upload_document(
     tmp.close()
 
     background_tasks.add_task(
-        rag_service.ingest_document,
-        file_path=tmp.name,
-        filename=file.filename,
-        document_id=doc.id,
-        business_id=business_id,
-        db=db
+        run_ingestion_with_new_session,
+        tmp.name,
+        file.filename,
+        doc.id,
+        business_id
     )
 
     return {
@@ -59,8 +98,12 @@ async def upload_document(
 
 
 # --- List documents ---
-@router.get("/documents/{business_id}")
-def list_documents(business_id: int, db: Session = Depends(get_db)):
+@router.get("/documents")
+def list_documents(
+    token: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    business_id = get_business_id_from_token(token, db)
     docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.business_id == business_id
     ).all()
@@ -80,9 +123,15 @@ def list_documents(business_id: int, db: Session = Depends(get_db)):
 
 # --- Delete document ---
 @router.delete("/documents/{document_id}")
-def delete_document(document_id: int, db: Session = Depends(get_db)):
+def delete_document(
+    document_id: int,
+    token: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    business_id = get_business_id_from_token(token, db)
     doc = db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.id == document_id
+        KnowledgeDocument.id == document_id,
+        KnowledgeDocument.business_id == business_id
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -98,12 +147,13 @@ class DraftRequest(BaseModel):
     conversation_history: Optional[List[dict]] = []
 
 
-@router.post("/generate-draft/{business_id}")
+@router.post("/generate-draft")
 async def generate_draft(
-    business_id: int,
     payload: DraftRequest,
+    token: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
+    business_id = get_business_id_from_token(token, db)
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
@@ -134,7 +184,7 @@ async def generate_draft(
 # --- Query knowledge base (For Testing in Frontend Settings) ---
 class QueryRequest(BaseModel):
     question: str
-    business_id: int
+    token: Optional[str] = None
 
 
 @router.post("/query")
@@ -145,9 +195,11 @@ async def query_knowledge(
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
+    business_id = get_business_id_from_token(payload.token, db)
+
     result = rag_service.query(
         question=payload.question,
-        business_id=payload.business_id,
+        business_id=business_id,
         db=db
     )
 
@@ -160,4 +212,3 @@ async def query_knowledge(
         }
 
     return result
-

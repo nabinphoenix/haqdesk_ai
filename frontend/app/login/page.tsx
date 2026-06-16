@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -24,7 +26,7 @@ export default function LoginPage() {
             formData.append("username", email);
             formData.append("password", password);
 
-            const response = await fetch("http://localhost:8000/api/v1/auth/token", {
+            const response = await fetch(`${API_URL}/api/v1/auth/token`, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: formData,
@@ -151,7 +153,7 @@ export default function LoginPage() {
                     {/* Google button */}
                     <button
                         type="button"
-                        onClick={() => { window.location.href = "http://localhost:8000/api/v1/auth/google"; }}
+                        onClick={() => { window.location.href = `${API_URL}/api/v1/auth/google`; }}
                         className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-white/10 bg-white/5 text-[13px] font-medium text-white hover:bg-white/10 transition-all mb-5"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18">
