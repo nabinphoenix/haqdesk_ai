@@ -1,0 +1,51 @@
+# Core framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+psycopg2-binary
+pgvector
+alembic
+
+# Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+authlib
+httpx
+itsdangerous
+
+# AI / RAG pipeline
+langchain
+langchain-community
+langchain-huggingface
+langchain-groq
+langchain-text-splitters
+sentence-transformers
+groq
+pypdf
+python-docx
+pymupdf
+langdetect
+
+# Hugging Face / BERT
+transformers
+torch
+
+# Queue / background jobs
+celery
+redis
+
+# Utilities
+python-dotenv
+pydantic
+pydantic-settings
+requests
+fastapi-mail
+
+# Testing
+pytest
+pytest-asyncio
+httpx
