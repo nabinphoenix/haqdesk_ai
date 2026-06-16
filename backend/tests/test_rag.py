@@ -19,7 +19,7 @@ def test_cross_business_denied():
     # Try to read conversation from business 3 (Xer Xes)
     response = client.get(
         "/api/v1/inbox/conversations/1/messages",
-        params={"token": token}
+        headers={"Authorization": f"Bearer {token}"}
     )
     # Should succeed only if conversation belongs to business 1
-    assert response.status_code in [200, 403]
+    assert response.status_code in [200, 403, 404]

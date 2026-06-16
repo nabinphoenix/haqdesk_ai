@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 import AISuggestionBox from "./AISuggestionBox";
+import { fetchWithAuth } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Send,
@@ -105,10 +106,9 @@ export default function ChatWindow({
 
     const fetchMessages = async () => {
         if (!conversationId) return;
-        const token = localStorage.getItem("token");
         try {
-            const res = await fetch(
-                `${API_URL}/api/v1/inbox/conversations/${conversationId}/messages?token=${token}&t=${Date.now()}`,
+            const res = await fetchWithAuth(
+                `/api/v1/inbox/conversations/${conversationId}/messages?t=${Date.now()}`,
                 { cache: "no-store" }
             );
             if (!res.ok) return;
@@ -207,16 +207,16 @@ export default function ChatWindow({
         try {
             let res: Response;
             if (platform?.toLowerCase() === "whatsapp") {
-                res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {
+                res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: text, token }),
+                    body: JSON.stringify({ content: text }),
                 });
             } else {
-                res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/reply?token=${token}`, {
+                res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: text, token }),
+                    body: JSON.stringify({ content: text }),
                 });
             }
             if (res.ok) fetchMessages();

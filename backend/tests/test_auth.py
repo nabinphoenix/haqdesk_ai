@@ -21,7 +21,7 @@ def test_login_wrong_password():
 
 def test_inbox_without_token():
     response = client.get("/api/v1/inbox/conversations")
-    assert response.status_code in [401, 200]  # 200 returns empty list
+    assert response.status_code == 401
 
 def test_register_duplicate_business():
     response = client.post("/api/v1/auth/register", json={

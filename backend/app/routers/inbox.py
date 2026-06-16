@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 from jose import JWTError, jwt
 
 from app.core.database import get_db
@@ -17,30 +18,14 @@ from app.core.config import settings
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 messaging_service = MessagingService()
 
-async def get_current_user(token: str, db: Session):
-    """Utility to get user from token"""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            return None
-        user = db.query(User).filter(User.email == email).first()
-        return user
-    except JWTError:
-        return None
+from app.core.dependencies import get_current_user
 
 @router.get("/conversations")
 async def get_conversations(
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Fetch conversations filtered by the logged-in user's business_id"""
-    current_user = None
-    if token:
-        current_user = await get_current_user(token, db)
-    
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Token expired or invalid")
         
     # Build query filtered by business_id
     query = db.query(Conversation)
@@ -88,18 +73,9 @@ async def get_conversations(
 @router.get("/conversations/{conversation_id}/messages")
 async def get_messages(
     conversation_id: int,
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Get current user
-    current_user = None
-    if token:
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            email = payload.get("sub")
-            current_user = db.query(User).filter(User.email == email).first()
-        except:
-            pass
 
     # Get conversation
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -141,25 +117,17 @@ async def get_messages(
 
     return result
 
+class ReplyRequest(BaseModel):
+    content: str
+
 @router.post("/conversations/{conversation_id}/reply")
 async def reply_to_conversation(
     conversation_id: int,
-    content: str = Body(..., embed=True),
-    token: Optional[str] = Body(None, embed=True),
-    db: Session = Depends(get_db)
+    request: ReplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Require auth first
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email = payload.get("sub")
-        current_user = db.query(User).filter(User.email == email).first()
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token expired")
+    content = request.content
 
     conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not conv:

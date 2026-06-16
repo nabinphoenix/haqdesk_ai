@@ -16,23 +16,8 @@ from app.models.user import User
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
-def get_business_id_from_token(token: Optional[str] = None, db: Session = Depends(get_db)) -> int:
-    """Extract business_id from JWT token. Never trust frontend."""
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email = payload.get("sub")
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        if not user.business_id:
-            raise HTTPException(status_code=403, detail="No business associated with this account")
-        return user.business_id
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token expired or invalid")
+from app.core.dependencies import get_current_user
+import re
 
 
 def run_ingestion_with_new_session(tmp_path, filename, document_id, business_id):
@@ -55,11 +40,13 @@ def run_ingestion_with_new_session(tmp_path, filename, document_id, business_id)
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    token: Optional[str] = None,
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    business_id = get_business_id_from_token(token, db)
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
     
     allowed = ["pdf", "docx", "txt"]
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
@@ -67,10 +54,18 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {allowed}")
 
     file_bytes = await file.read()
+    
+    if len(file_bytes) == 0:
+        raise HTTPException(status_code=400, detail="File is empty.")
+    
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
+        
+    safe_filename = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', file.filename)
 
     doc = KnowledgeDocument(
         business_id=business_id,
-        filename=file.filename,
+        filename=safe_filename,
         status="processing"
     )
     db.add(doc)
@@ -84,7 +79,7 @@ async def upload_document(
     background_tasks.add_task(
         run_ingestion_with_new_session,
         tmp.name,
-        file.filename,
+        safe_filename,
         doc.id,
         business_id
     )
@@ -92,7 +87,7 @@ async def upload_document(
     return {
         "message": "Document upload started.",
         "document_id": doc.id,
-        "filename": file.filename,
+        "filename": safe_filename,
         "status": "processing"
     }
 
@@ -100,10 +95,12 @@ async def upload_document(
 # --- List documents ---
 @router.get("/documents")
 def list_documents(
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    business_id = get_business_id_from_token(token, db)
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
     docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.business_id == business_id
     ).all()
@@ -125,10 +122,12 @@ def list_documents(
 @router.delete("/documents/{document_id}")
 def delete_document(
     document_id: int,
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    business_id = get_business_id_from_token(token, db)
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
     doc = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.id == document_id,
         KnowledgeDocument.business_id == business_id
@@ -150,10 +149,12 @@ class DraftRequest(BaseModel):
 @router.post("/generate-draft")
 async def generate_draft(
     payload: DraftRequest,
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    business_id = get_business_id_from_token(token, db)
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
@@ -184,18 +185,19 @@ async def generate_draft(
 # --- Query knowledge base (For Testing in Frontend Settings) ---
 class QueryRequest(BaseModel):
     question: str
-    token: Optional[str] = None
-
 
 @router.post("/query")
 async def query_knowledge(
     payload: QueryRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    business_id = get_business_id_from_token(payload.token, db)
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
 
     result = rag_service.query(
         question=payload.question,

@@ -8,6 +8,7 @@ import {
   CheckCircle2, Zap, Bot, Shield, Copy, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { fetchWithAuth } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -66,11 +67,7 @@ export default function TeamPage() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-        const res = await fetch(`${API_URL}/api/v1/team/members`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetchWithAuth("/api/v1/team/members");
         if (res.ok) {
           const data = await res.json();
           setMembers(
@@ -101,10 +98,8 @@ export default function TeamPage() {
     const member = members.find((m) => m.id === id);
     if (!member) return;
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_URL}/api/v1/team/members/${id}`, {
+      const res = await fetchWithAuth(`/api/v1/team/members/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setMembers((prev) => prev.filter((m) => m.id !== id));
@@ -123,12 +118,10 @@ export default function TeamPage() {
     if (!inviteEmail.trim()) return;
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_URL}/api/v1/team/invite`, {
+      const res = await fetchWithAuth(`/api/v1/team/invite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });

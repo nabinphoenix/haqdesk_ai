@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { fetchWithAuth } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Search, Upload, Database, Plus,
@@ -41,9 +42,8 @@ export default function KnowledgeBase() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = async () => {
-    const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`${API_URL}/api/v1/knowledge/documents?token=${token}`);
+      const response = await fetchWithAuth("/api/v1/knowledge/documents");
       if (response.ok) {
         const data = await response.json();
         setDocuments(data);
@@ -79,9 +79,8 @@ export default function KnowledgeBase() {
     formData.append("file", file);
     try {
       setUploadProgress(30);
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_URL}/api/v1/knowledge/upload?token=${token}`,
+      const response = await fetchWithAuth(
+        "/api/v1/knowledge/upload",
         { method: "POST", body: formData }
       );
       setUploadProgress(70);
@@ -118,8 +117,7 @@ export default function KnowledgeBase() {
     e.stopPropagation();
     if (!confirm("Delete this document and all its indexed data?")) return;
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_URL}/api/v1/knowledge/documents/${id}?token=${token}`, { method: "DELETE" });
+      const response = await fetchWithAuth(`/api/v1/knowledge/documents/${id}`, { method: "DELETE" });
       if (response.ok) {
         setDocuments(prev => prev.filter(doc => doc.id !== id));
         if (selectedDoc?.id === id) setSelectedDoc(null);
@@ -133,11 +131,10 @@ export default function KnowledgeBase() {
     setQueryLoading(true);
     setQueryResult(null);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_URL}/api/v1/knowledge/query`, {
+      const response = await fetchWithAuth(`/api/v1/knowledge/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: queryText, token: token }),
+        body: JSON.stringify({ question: queryText }),
       });
       if (response.ok) setQueryResult(await response.json());
     } catch { console.error("Query failed"); }

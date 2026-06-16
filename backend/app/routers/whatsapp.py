@@ -3,6 +3,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Body, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from app.core.dependencies import get_current_user
+from app.models.user import User
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -35,22 +39,54 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks, d
     """Receive incoming WhatsApp messages and process them.
     Delegates to existing WebhookService logic which saves messages and triggers AI reply.
     """
-    payload = await request.json()
+    import hmac
+    import hashlib
+    import json
+    
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    app_secret = settings.FACEBOOK_CLIENT_SECRET
+    
+    if app_secret:
+        if not signature.startswith("sha256="):
+            raise HTTPException(status_code=403, detail="Invalid signature format")
+            
+        expected_signature = "sha256=" + hmac.new(
+            app_secret.encode("utf-8"),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected_signature):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+    payload = json.loads(body)
     await whatsapp_service.process_whatsapp_webhook(db, payload, background_tasks)
     return {"status": "received"}
 
+class WhatsAppSendRequest(BaseModel):
+    conversation_id: int
+    message: str
+
 @router.post("/send")
 async def send_message(
-    conversation_id: int = Body(...),
-    message: str = Body(...),
+    request: WhatsAppSendRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Send a WhatsApp message for a given conversation.
     Looks up the customer phone number and uses MessagingService.
     """
+    conversation_id = request.conversation_id
+    message = request.message
+    
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    if conversation.business_id != current_user.business_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+        
     customer = db.query(Customer).filter(Customer.id == conversation.customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")

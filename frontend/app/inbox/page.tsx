@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import ChatWindow from "@/components/chat/ChatWindow";
 import CustomerSidebar from "@/components/chat/CustomerSidebar";
+import { fetchWithAuth } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Search,
@@ -134,10 +135,8 @@ export default function InboxPage() {
 
     const fetchConversations = useCallback(async () => {
         try {
-            const token = localStorage.getItem("token");
-            console.log("Token:", token);
-            const response = await fetch(
-                `${API_URL}/api/v1/inbox/conversations?token=${token}&t=${Date.now()}`,
+            const response = await fetchWithAuth(
+                `/api/v1/inbox/conversations?t=${Date.now()}`,
                 { cache: "no-store" }
             );
             

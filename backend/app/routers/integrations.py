@@ -169,8 +169,29 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks, d
     """
     import json
     import sys
+    import hmac
+    import hashlib
+    from app.core.config import settings
     
-    data = await request.json()
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    
+    # Meta webhook signature validation
+    app_secret = settings.FACEBOOK_CLIENT_SECRET
+    if app_secret:
+        if not signature.startswith("sha256="):
+            raise HTTPException(status_code=403, detail="Invalid signature format")
+            
+        expected_signature = "sha256=" + hmac.new(
+            app_secret.encode("utf-8"),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected_signature):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+    data = json.loads(body)
     
     # 🚨 FORCE PRINT TO TERMINAL
     print("\n" + "="*50, flush=True)

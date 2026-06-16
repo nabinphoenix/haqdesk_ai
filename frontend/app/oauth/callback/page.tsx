@@ -9,39 +9,54 @@ export default function OAuthCallback() {
   useEffect(() => {
     // Parse query parameters from the URL
     const query = new URLSearchParams(window.location.search)
-    const token = query.get("token")
-    const role = query.get("role")
-    const name = query.get("name")
-    const email = query.get("email")
-    const businessId = query.get("business_id")
+    const code = query.get("code")
     const error = query.get("error")
 
     // If an error param is present (e.g., unverified_email), handle it
     if (error) {
-      // Show an alert (could be replaced with UI toast later)
       alert(`Authentication error: ${error}`)
       router.replace("/login")
       return
     }
 
-    if (!token) {
-      // Missing token – cannot authenticate
-      alert("Authentication token missing. Redirecting to login.")
+    if (!code) {
+      alert("Authentication code missing. Redirecting to login.")
       router.replace("/login")
       return
     }
 
-    // Store auth details in localStorage (same keys as existing login flow)
-    localStorage.setItem("token", token)
-    if (role) localStorage.setItem("userRole", role)
-    if (name) localStorage.setItem("userName", name)
-    if (email) localStorage.setItem("userEmail", email)
-    if (businessId) localStorage.setItem("userBusinessId", businessId)
+    // Exchange the code for a token
+    const exchangeCode = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+        const res = await fetch(`${API_URL}/api/v1/auth/oauth/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code })
+        })
 
-    // TODO: Replace localStorage with httpOnly cookie based auth in a future iteration.
+        if (res.ok) {
+          const data = await res.json()
+          
+          localStorage.setItem("token", data.access_token)
+          if (data.user.role) localStorage.setItem("userRole", data.user.role)
+          if (data.user.name) localStorage.setItem("userName", data.user.name)
+          if (data.user.email) localStorage.setItem("userEmail", data.user.email)
+          if (data.user.business_id) localStorage.setItem("userBusinessId", data.user.business_id)
+          
+          router.replace("/inbox")
+        } else {
+          alert("Failed to exchange authentication code.")
+          router.replace("/login")
+        }
+      } catch (err) {
+        console.error("Exchange error:", err)
+        alert("Network error during authentication.")
+        router.replace("/login")
+      }
+    }
 
-    // Redirect to inbox after successful sign‑in
-    router.replace("/inbox")
+    exchangeCode()
   }, [router])
 
   // Simple UI while processing – could be a spinner or brand logo

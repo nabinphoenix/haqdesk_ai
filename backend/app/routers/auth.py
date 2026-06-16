@@ -18,6 +18,11 @@ import logging
 from fastapi import Request, Response
 from authlib.integrations.starlette_client import OAuth
 from app.auth.utils import get_or_create_user_by_email, pwd_context, hash_password
+from app.core.dependencies import get_current_user
+import uuid
+
+# In-memory store for OAuth codes (FYP-level approach)
+OAUTH_CODES = {}
 
 # Initialize OAuth client
 oauth = OAuth()
@@ -59,19 +64,12 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             return Response(status_code=302, headers={'Location': error_url})
         # Get or create local user, passing google fields
         user = get_or_create_user_by_email(db, email, name, google_id=google_id, avatar_url=avatar_url)
-        # Create JWT
-        jwt_token = create_access_token({
-            'sub': user.email,
-            'role': user.role,
-            'name': user.name,
-        })
-        # Build redirect URL for frontend callback
-        redirect_url = (
-            f"{settings.FRONTEND_URL}/oauth/callback?"
-            f"token={jwt_token}&name={user.name}&email={user.email}&role={user.role}"
-        )
-        if user.business_id:
-            redirect_url += f"&business_id={user.business_id}"
+        # Create temporary one-time code
+        code = str(uuid.uuid4())
+        OAUTH_CODES[code] = user
+
+        # Build redirect URL for frontend callback using the code only
+        redirect_url = f"{settings.FRONTEND_URL}/oauth/callback?code={code}"
         return Response(status_code=302, headers={'Location': redirect_url})
     except Exception as e:
         logging.error("OAuth callback error full traceback:")
@@ -107,23 +105,34 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-# Dependency to retrieve current user from JWT
-def get_current_user(request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing or invalid token')
-    token = auth_header.split(' ')[1]
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get('sub')
-        if email is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token payload')
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Token decode error')
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
-    return user
+from pydantic import BaseModel
+
+class OAuthExchangeRequest(BaseModel):
+    code: str
+
+@router.post('/oauth/exchange')
+async def oauth_exchange(request: OAuthExchangeRequest):
+    code = request.code
+    if code not in OAUTH_CODES:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth code")
+    
+    user = OAUTH_CODES.pop(code)
+    
+    access_token = create_access_token(
+        data={"sub": user.email, "role": user.role, "name": user.name}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "business_id": user.business_id
+        }
+    }
 
 
 @router.post("/token")

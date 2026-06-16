@@ -14,6 +14,7 @@ import {
     Search
 } from "lucide-react";
 import SocialIcon from "../ui/SocialIcon";
+import { fetchWithAuth } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -55,10 +56,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
 
     const fetchCustomerData = async () => {
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(`${API_URL}/api/v1/customers/${customerId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetchWithAuth(`/api/v1/customers/${customerId}`);
             if (res.ok) {
                 const data = await res.json();
                 setProfile(data);
@@ -71,10 +69,7 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
 
     const fetchConversations = async () => {
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(`${API_URL}/api/v1/customers/${customerId}/conversations`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetchWithAuth(`/api/v1/customers/${customerId}/conversations`);
             if (res.ok) {
                 setConversations(await res.json());
             }
@@ -86,11 +81,9 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
     const handleSaveNotes = async () => {
         setIsSaving(true);
         try {
-            const token = localStorage.getItem("token");
-            await fetch(`${API_URL}/api/v1/customers/${customerId}/notes`, {
+            await fetchWithAuth(`/api/v1/customers/${customerId}/notes`, {
                 method: "POST",
                 headers: { 
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ note: notes })
@@ -107,17 +100,15 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
         
         setIsLinking(true);
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(
-                `${API_URL}/api/v1/customers/${customerId}/create_and_link`,
+            const res = await fetchWithAuth(
+                `/api/v1/customers/${customerId}/create_and_link`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
                         display_name: manualName,
                         phone: manualPhone || null,
-                        email: manualEmail || null,
-                        token 
+                        email: manualEmail || null
                     })
                 }
             );

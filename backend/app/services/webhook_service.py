@@ -220,18 +220,14 @@ class WebhookService:
                     Business.id == integration.business_id
                 ).first()
 
-        # 2. Fallback to first business if no match found (temporary until all businesses register)
+        # 2. Prevent fallback to first business (Security Fix)
         if not business:
-            from app.models.business import Business
-            business = db.query(Business).first()
-            logger.warning(f"No integration found for page_id={recipient_id}. Using first business as fallback.")
-
-        if not business:
-            logger.error("No business found in database. Cannot process message.")
+            logger.error(f"No integration/business found for page_id={recipient_id}. Cannot process message.")
             return
         
-        # 2. Find or Create Customer
+        # 3. Find or Create Customer
         customer = db.query(Customer).filter(
+            Customer.business_id == business.id,
             Customer.platform_user_id == sender_id,
             Customer.platform == platform
         ).first()
