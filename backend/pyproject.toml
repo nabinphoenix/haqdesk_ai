@@ -1,0 +1,49 @@
+[project]
+name = "haqdesk-ai-backend"
+version = "0.1.0"
+description = "HaqDesk AI backend with LiteLLM-based LLM gateway"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pgvector",
+    "alembic",
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+    "bcrypt==4.0.1",
+    "authlib",
+    "httpx",
+    "itsdangerous",
+    "langchain",
+    "langchain-community",
+    "langchain-huggingface",
+    "langchain-groq",
+    "langchain-text-splitters",
+    "sentence-transformers",
+    "groq",
+    "pypdf",
+    "python-docx",
+    "pymupdf",
+    "langdetect",
+    "transformers",
+    "torch",
+    "celery",
+    "redis",
+    "python-dotenv",
+    "pydantic",
+    "pydantic-settings",
+    "requests",
+    "fastapi-mail",
+    "litellm"
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff"
+]

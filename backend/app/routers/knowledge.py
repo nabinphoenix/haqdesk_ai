@@ -1,23 +1,18 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Body
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
+import re
 import tempfile
-import os
-import uuid
-from jose import JWTError, jwt
+from typing import List, Optional
 
-from app.core.database import get_db, SessionLocal
-from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
-from app.services.rag_service import rag_service
-from app.core.config import settings
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import SessionLocal, get_db
+from app.core.dependencies import get_current_user
+from app.models.knowledge import KnowledgeDocument
 from app.models.user import User
+from app.services.rag_service import rag_service
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
-
-
-from app.core.dependencies import get_current_user
-import re
 
 
 def run_ingestion_with_new_session(tmp_path, filename, document_id, business_id):
@@ -158,7 +153,7 @@ async def generate_draft(
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    result = rag_service.query(
+    result = await rag_service.query(
         question=payload.message,
         business_id=business_id,
         db=db
@@ -199,7 +194,7 @@ async def query_knowledge(
     if not business_id:
         raise HTTPException(status_code=403, detail="No business associated with this account")
 
-    result = rag_service.query(
+    result = await rag_service.query(
         question=payload.question,
         business_id=business_id,
         db=db

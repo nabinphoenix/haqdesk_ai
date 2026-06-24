@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON
 from sqlalchemy.sql import func
 from ..core.database import Base
 
@@ -16,3 +16,4 @@ class Message(Base):
     ai_draft = Column(Text, nullable=True)
     ai_language = Column(String, nullable=True)
     sentiment = Column(String, nullable=True)
+    ai_metadata = Column(JSON, nullable=True)
