@@ -114,4 +114,60 @@ FYP/
 - **Team Management**: Interface for admins to manage business ID assignments (TS1, TS2, TS3).
 
 ---
+
+## 8. Backend Upgrade: LiteLLM Gateway & uv
+
+We have upgraded the backend to support a production-ready, multi-tenant RAG architecture with a centralized LiteLLM gateway, automatic provider fallback, rate-limit retries, and `uv`-based package management.
+
+### **Dependency Management with uv**
+Instead of plain `pip`, we use `uv` for lightning-fast package installation and locking.
+
+**Setup & Installation:**
+1. Install `uv` if you haven't already:
+   ```powershell
+   # On Windows
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+2. Navigate to the backend directory and sync the environment:
+   ```powershell
+   cd backend
+   uv sync
+   ```
+   This creates a virtual environment `.venv` and installs all dependencies from `pyproject.toml` and locks them in `uv.lock`.
+
+### **Running the Application**
+To start the backend with `uv`:
+```powershell
+uv run uvicorn app.main:app --reload
+```
+
+### **Running Tests & Quality Checks**
+We use `pytest` for unit testing and `ruff` for linting.
+```powershell
+# Run the test suite
+uv run python -m pytest -q
+
+# Run ruff check for linting
+uv run ruff check app tests
+```
+
+### **Preflight Verification**
+Ensure the system is configured correctly and dependencies/connections are healthy:
+```powershell
+uv run python -m app.core.preflight
+```
+You can also ping the HTTP endpoint: `GET /health/preflight`
+
+### **LLM Gateway & Provider Fallback**
+The system uses a LiteLLM-powered centralized LLM gateway (`app/services/llm_gateway.py`). The RAG pipeline retrieves tenant-isolated context from PostgreSQL/pgvector and sends the structured prompt to the gateway.
+- The gateway tries the primary model (`LLM_PRIMARY_MODEL` e.g., `groq/llama-3.3-70b-versatile`) first.
+- If a retryable error occurs (such as a 429 rate limit, quota exhaustion, or service outage), it automatically falls back to secondary models listed in `LLM_FALLBACK_MODELS` (e.g. `gemini/gemini-2.0-flash` or `openrouter/...`).
+- Custom retryable error checking ensures that bad configuration or invalid keys fail immediately instead of triggering slow timeouts, while network timeouts and rate limits trigger immediate fallback.
+
+> [!WARNING]
+> **Important Security Reminder:**
+> - Never commit your `.env` file to version control.
+> - Ensure all API keys and secrets remain local.
+
+---
 *Document Created: January 30, 2026*

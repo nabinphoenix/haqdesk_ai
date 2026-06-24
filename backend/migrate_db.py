@@ -79,6 +79,7 @@ def migrate():
             ("ai_draft", "TEXT"),
             ("ai_language", "VARCHAR"),
             ("sentiment", "VARCHAR"),
+            ("ai_metadata", "JSON"),
         ]
 
         for col_name, col_type in messages_columns_to_add:

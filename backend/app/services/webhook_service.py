@@ -1,33 +1,31 @@
-from sqlalchemy.orm import Session
-from app.models.customer import Customer
-from app.models.conversation import Conversation
-from app.models.message import Message
-from app.models.business import Business
-from app.models.integration import Integration
+import asyncio
 import logging
+import threading
+import httpx
+
 from fastapi import BackgroundTasks
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.models.business import Business
+from app.models.conversation import Conversation
+from app.models.customer import Customer
+from app.models.integration import Integration
+from app.models.message import Message
+from app.services.rag_service import rag_service
+from app.services.sentiment_service import detect_sentiment
 
 logger = logging.getLogger("uvicorn")
 
-import threading
-from sqlalchemy import text
-from app.core.database import SessionLocal
-from app.services.rag_service import rag_service
 
-def process_incoming_message_in_background(message_id: int, conversation_id: int, message_text: str, business_id: int):
+async def process_incoming_message_in_background(message_id: int, conversation_id: int, message_text: str, business_id: int):
     """
     Analyzes the message for language and sentiment (BERT),
     queries the RAG knowledge base, generates an AI draft reply,
     and updates the Message in the database.
     Also creates a separate 'ai' sender_type message to trigger the frontend float box.
     """
-    from app.core.database import SessionLocal
-    from app.services.rag_service import rag_service
-    from app.services.sentiment_service import detect_sentiment
-    from app.models.message import Message
-    import logging
-
-    logger = logging.getLogger("uvicorn")
     db = SessionLocal()
     try:
         # 1. Detect language
@@ -37,16 +35,19 @@ def process_incoming_message_in_background(message_id: int, conversation_id: int
         sentiment = detect_sentiment(message_text)
         
         # 3. Query RAG to get the suggested draft reply (which also translates/matches the language style)
-        rag_result = rag_service.query(
+        rag_result = await rag_service.query(
             question=message_text,
             business_id=business_id,
             db=db,
-            language=language
+            language=language,
+            sentiment=sentiment
         )
         
         draft = None
+        metadata = None
         if rag_result and rag_result.get("answer"):
             draft = rag_result["answer"]
+            metadata = rag_result.get("metadata")
 
         # 4. Update the original customer message in the database with the metadata
         msg = db.query(Message).filter(Message.id == message_id).first()
@@ -54,6 +55,8 @@ def process_incoming_message_in_background(message_id: int, conversation_id: int
             msg.ai_draft = draft
             msg.ai_language = language
             msg.sentiment = sentiment
+            if hasattr(msg, "ai_metadata"):
+                msg.ai_metadata = metadata
             db.commit()
             logger.info(f"Updated customer message {message_id} with sentiment={sentiment}, language={language}, has_draft={draft is not None}")
 
@@ -154,7 +157,6 @@ class WebhookService:
             
             # 4. Handle Postbacks (Buttons, Get Started)
             elif "postback" in event:
-                payload = event["postback"].get("payload")
                 title = event["postback"].get("title")
                 await self._handle_platform_message(
                     db,
@@ -215,7 +217,6 @@ class WebhookService:
                 Integration.status == "active"
             ).first()
             if integration:
-                from app.models.business import Business
                 business = db.query(Business).filter(
                     Business.id == integration.business_id
                 ).first()
@@ -239,8 +240,6 @@ class WebhookService:
                 # Fetch real name from Meta if possible (Facebook/Instagram)
                 if platform in ["facebook", "instagram"]:
                     try:
-                        import httpx
-                        from app.core.config import settings
                         # Note: This might need Page Access Token depending on the platform
                         profile_url = f"https://graph.facebook.com/v18.0/{sender_id}"
                         params = {
@@ -306,12 +305,21 @@ class WebhookService:
         db.commit()
         
         # Trigger background processing (sentiment, language, RAG draft)
-        import threading
-        threading.Thread(
-            target=process_incoming_message_in_background,
-            args=(new_message.id, conversation.id, new_message.content, business.id),
-            daemon=True
-        ).start()
+        if background_tasks:
+            background_tasks.add_task(
+                process_incoming_message_in_background,
+                new_message.id, conversation.id, new_message.content, business.id
+            )
+        else:
+            # Fallback to threading with new event loop
+            def run_async():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(process_incoming_message_in_background(
+                    new_message.id, conversation.id, new_message.content, business.id
+                ))
+                loop.close()
+            threading.Thread(target=run_async, daemon=True).start()
         
         logger.info(f"✅ {platform} message successfully saved to database!")
 

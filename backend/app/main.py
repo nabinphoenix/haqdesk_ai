@@ -33,6 +33,11 @@ app.include_router(team.router, prefix="/api/v1/team")
 async def root():
     return {"message": "Welcome to HaqDesk AI API"}
 
+@app.get("/health/preflight")
+async def health_preflight():
+    from app.core.preflight import run_preflight
+    return run_preflight()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
