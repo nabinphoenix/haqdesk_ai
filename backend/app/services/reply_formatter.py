@@ -14,7 +14,6 @@ _GENERIC_NAME = re.compile(
     r"^user\s*\d*$|^customer\s*\d*$|^unknown$",
     re.IGNORECASE,
 )
-_SIGNATURE = "Best regards,\nTechSuru Support Team"
 
 
 def usable_customer_name(value: str):
@@ -29,16 +28,17 @@ def usable_customer_name(value: str):
     return name
 
 
-def ensure_signature(value: str) -> str:
+def ensure_signature(value: str, business_name: str = "TechSuru") -> str:
     """Guarantee one consistent plain-text support signature."""
     text = structured_plain_text(value)
     text = re.sub(
-        r"\n*(?:Best regards,?\s*\n+)?TechSuru Support Team\s*$",
+        r"\n*(?:Best regards,?\s*\n+)?[^\n]{1,80} Support Team\s*$",
         "",
         text,
         flags=re.IGNORECASE,
     ).rstrip()
-    return f"{text}\n\n{_SIGNATURE}" if text else _SIGNATURE
+    signature = f"Best regards,\n{business_name} Support Team"
+    return f"{text}\n\n{signature}" if text else signature
 
 
 def structured_plain_text(value: str) -> str:

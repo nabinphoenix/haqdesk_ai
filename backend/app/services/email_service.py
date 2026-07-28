@@ -36,7 +36,9 @@ def send_email_as_business(
     html_body: str,
     from_email: str,
     from_password: str,
-    from_name: str = "TechSuru Support"
+    from_name: str = "TechSuru Support",
+    smtp_host: str = None,
+    smtp_port: int = None,
 ) -> bool:
     """Send email using the business's own Gmail credentials."""
     try:
@@ -47,7 +49,10 @@ def send_email_as_business(
 
         msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT) as server:
+        with smtplib.SMTP(
+            smtp_host or settings.MAIL_SERVER,
+            smtp_port or settings.MAIL_PORT,
+        ) as server:
             server.starttls()
             server.login(from_email, from_password)
             server.sendmail(from_email, to_email, msg.as_string())

@@ -17,37 +17,37 @@ class OAuthService:
         self.facebook_client_secret = settings.FACEBOOK_CLIENT_SECRET
         self.redirect_uri = settings.OAUTH_REDIRECT_URI
         
-    def get_facebook_auth_url(self, business_id: int) -> str:
+    def get_facebook_auth_url(self, state: str) -> str:
         """Generate Facebook OAuth URL"""
-        scope = "public_profile,email,pages_messaging"
+        scope = "public_profile,email,pages_show_list,pages_messaging,pages_manage_metadata"
         return (
             f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.facebook_client_id}&"
             f"redirect_uri={self.redirect_uri}/facebook/callback&"
             f"scope={scope}&"
-            f"state={business_id}"
+            f"state={state}"
         )
     
-    def get_instagram_auth_url(self, business_id: int) -> str:
+    def get_instagram_auth_url(self, state: str) -> str:
         """Generate Instagram OAuth URL (uses same Meta Platform)"""
-        scope = "instagram_basic,instagram_manage_messages"
+        scope = "pages_show_list,pages_manage_metadata,instagram_basic,instagram_manage_messages"
         return (
             f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.facebook_client_id}&"
             f"redirect_uri={self.redirect_uri}/instagram/callback&"
             f"scope={scope}&"
-            f"state={business_id}"
+            f"state={state}"
         )
     
-    def get_whatsapp_auth_url(self, business_id: int) -> str:
+    def get_whatsapp_auth_url(self, state: str) -> str:
         """Generate WhatsApp OAuth URL (via Meta Business)"""
-        scope = "whatsapp_business_messaging,whatsapp_business_management"
+        scope = "business_management,whatsapp_business_messaging,whatsapp_business_management"
         return (
             f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.facebook_client_id}&"
             f"redirect_uri={self.redirect_uri}/whatsapp/callback&"
             f"scope={scope}&"
-            f"state={business_id}"
+            f"state={state}"
         )
     
     async def exchange_code_for_token(self, platform: str, code: str) -> Dict:
@@ -120,3 +120,77 @@ class OAuthService:
             else:
                 print(f"⚠️ Failed to subscribe page {page_id}: {response.text}")
                 return False
+
+    async def discover_facebook_pages(self, user_access_token: str) -> list[dict]:
+        """Return managed Pages with Page IDs and Page access tokens."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                "https://graph.facebook.com/v18.0/me/accounts",
+                params={
+                    "fields": "id,name,access_token",
+                    "access_token": user_access_token,
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data", [])
+
+    async def discover_instagram_accounts(self, user_access_token: str) -> list[dict]:
+        """Return professional Instagram accounts linked to managed Pages."""
+        pages = await self.discover_facebook_pages(user_access_token)
+        discovered = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for page in pages:
+                page_token = page.get("access_token")
+                response = await client.get(
+                    f"https://graph.facebook.com/v18.0/{page['id']}",
+                    params={
+                        "fields": "instagram_business_account{id,username,name}",
+                        "access_token": page_token or user_access_token,
+                    },
+                )
+                if not response.is_success:
+                    continue
+                account = response.json().get("instagram_business_account")
+                if account:
+                    discovered.append({
+                        "instagram_account_id": account["id"],
+                        "username": account.get("username") or account.get("name"),
+                        "facebook_page_id": page["id"],
+                        "facebook_page_name": page.get("name"),
+                        "page_access_token": page_token,
+                    })
+        return discovered
+
+    async def discover_whatsapp_accounts(self, user_access_token: str) -> list[dict]:
+        """Return WABAs and registered phone-number IDs available to the user."""
+        discovered = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            businesses = await client.get(
+                "https://graph.facebook.com/v18.0/me/businesses",
+                params={"access_token": user_access_token},
+            )
+            businesses.raise_for_status()
+            for business in businesses.json().get("data", []):
+                wabas = await client.get(
+                    f"https://graph.facebook.com/v18.0/{business['id']}/owned_whatsapp_business_accounts",
+                    params={"access_token": user_access_token},
+                )
+                if not wabas.is_success:
+                    continue
+                for waba in wabas.json().get("data", []):
+                    phones = await client.get(
+                        f"https://graph.facebook.com/v18.0/{waba['id']}/phone_numbers",
+                        params={"access_token": user_access_token},
+                    )
+                    if not phones.is_success:
+                        continue
+                    for phone in phones.json().get("data", []):
+                        discovered.append({
+                            "business_manager_id": business["id"],
+                            "whatsapp_business_account_id": waba["id"],
+                            "whatsapp_business_name": waba.get("name"),
+                            "phone_number_id": phone["id"],
+                            "display_phone_number": phone.get("display_phone_number"),
+                            "verified_name": phone.get("verified_name"),
+                        })
+        return discovered

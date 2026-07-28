@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.message import Message
+from app.models.business import Business
 
 from app.services.nepali_normalizer import normalize_nepali_text, get_embedding_input
 from app.services.qa_parser import parse_qa_pairs
@@ -336,6 +337,7 @@ class RAGService:
         sentiment: Optional[str] = None,
         platform: Optional[str] = None,
         customer_name: Optional[str] = None,
+        business_name: Optional[str] = None,
         **kwargs
     ) -> Optional[dict]:
         """Full RAG pipeline: retrieve → generate → return answer with context memory."""
@@ -343,6 +345,12 @@ class RAGService:
 
         try:
             detected_lang = language or self.detect_language(question)
+            if not business_name and db:
+                business = db.query(Business).filter(
+                    Business.id == business_id
+                ).first()
+                business_name = business.name if business else None
+            business_name = business_name or "the business"
 
             # 1. Retrieve relevant chunks
             chunks = self.retrieve_chunks(question, business_id, top_k)
@@ -357,9 +365,15 @@ class RAGService:
                 ])
                 sources = list(set(c["filename"] for c in chunks if c["filename"]))
             else:
-                logger.info(f"[RAG] Low confidence ({top_score:.3f}) or no chunks found for query. Using general store knowledge.")
-                context = "No specific policy document match found. Answer using general helpful support knowledge for TechSuru store (electronics, laptops, mobiles, tablets, computer accessories, repairs available)."
-                top_score = max(top_score, 0.75)
+                logger.info(
+                    f"[RAG] Low confidence ({top_score:.3f}) or no chunks found. "
+                    "Refusing cross-business/general policy assumptions."
+                )
+                context = (
+                    "No sufficiently relevant business document was found. "
+                    "Do not invent an answer or use another business's policies. "
+                    "Tell the customer that the support team needs to confirm this information."
+                )
 
             # 2. Build system prompt using unified prompt builder (Fix 4)
             system_prompt = build_system_prompt(
@@ -369,6 +383,7 @@ class RAGService:
                 sentiment=sentiment,
                 platform=platform,
                 customer_name=customer_name,
+                business_name=business_name,
             )
 
             # 3. Retrieve conversation history with current_message_id exclusion (Fix 1)

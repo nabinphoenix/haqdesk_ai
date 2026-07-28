@@ -21,12 +21,41 @@ from app.services.reply_formatter import (
     structured_plain_text,
     usable_customer_name,
 )
+from app.services.credential_service import decrypt_secret
 from app.services.sentiment_service import detect_sentiment
 
 logger = logging.getLogger("uvicorn")
 
 
 from datetime import datetime, timezone
+
+
+def find_business_for_recipient(
+    db: Session,
+    platform: str,
+    recipient_id: str,
+):
+    """Resolve one incoming channel identity to exactly one business."""
+    if not recipient_id:
+        return None
+    integrations = db.query(Integration).filter(
+        Integration.page_id == recipient_id,
+        Integration.platform == platform,
+        Integration.status == "active",
+    ).all()
+    if len(integrations) != 1:
+        if len(integrations) > 1:
+            logger.error(
+                "Ambiguous webhook route for platform=%s recipient_id=%s",
+                platform,
+                recipient_id,
+            )
+        return None
+    integration = integrations[0]
+    return db.query(Business).filter(
+        Business.id == integration.business_id
+    ).first()
+
 
 async def process_incoming_message_in_background(
     message_id: int,
@@ -81,7 +110,10 @@ async def process_incoming_message_in_background(
         draft = None
         metadata = None
         if rag_result and rag_result.get("answer"):
-            draft = ensure_signature(rag_result["answer"])
+            draft = ensure_signature(
+                rag_result["answer"],
+                business.name if business else "Customer",
+            )
             metadata = rag_result.get("metadata")
 
         # 5. Update the original customer message in the database with the metadata
@@ -186,16 +218,40 @@ async def dispatch_auto_ai_reply(
             from app.services.email_service import send_email_as_business
             customer_email = customer.platform_user_id
             if customer_email and "@" in customer_email:
-                from_email = settings.TECHSURU_IMAP_EMAIL
-                from_password = settings.TECHSURU_IMAP_PASSWORD
+                email_metadata = integration.metadata_json if integration else {}
+                if integration and email_metadata.get("password_encrypted"):
+                    from_email = email_metadata.get("email") or integration.page_id
+                    from_password = decrypt_secret(
+                        email_metadata["password_encrypted"]
+                    )
+                    smtp_host = email_metadata.get("smtp_host", "smtp.gmail.com")
+                    smtp_port = int(email_metadata.get("smtp_port", 587))
+                elif business_id == 1:
+                    from_email = settings.TECHSURU_IMAP_EMAIL
+                    from_password = settings.TECHSURU_IMAP_PASSWORD
+                    smtp_host = settings.MAIL_SERVER
+                    smtp_port = settings.MAIL_PORT
+                else:
+                    from_email = None
+                    from_password = None
+                    smtp_host = None
+                    smtp_port = None
                 if from_email and from_password:
+                    business = db.query(Business).filter(
+                        Business.id == business_id
+                    ).first()
                     sent = send_email_as_business(
                         to_email=customer_email,
                         subject=reply_subject or "Re: TechSuru Support",
                         html_body=email_html(reply_text),
                         from_email=from_email,
                         from_password=from_password,
-                        from_name="TechSuru Support"
+                        from_name=(
+                            f"{business.name} Support"
+                            if business else "Customer Support"
+                        ),
+                        smtp_host=smtp_host,
+                        smtp_port=smtp_port,
                     )
                     if not sent:
                         raise RuntimeError(
@@ -376,6 +432,7 @@ class WebhookService:
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
+                phone_number_id = value.get("metadata", {}).get("phone_number_id")
                 if "messages" in value:
                     for message in value["messages"]:
                         sender_id = message["from"]
@@ -450,7 +507,8 @@ class WebhookService:
                             message_text=message_text,
                             message_type=message_type,
                             display_name=display_name,
-                            background_tasks=background_tasks
+                            background_tasks=background_tasks,
+                            recipient_id=phone_number_id,
                         )
 
     async def _handle_platform_message(
@@ -464,17 +522,11 @@ class WebhookService:
         logger.info(f"Processing {platform} message from {sender_id}: {message_text}")
         
         # 1. Find business by matching recipient_id (page_id) to integrations table
-        business = None
-        if recipient_id:
-            integration = db.query(Integration).filter(
-                Integration.page_id == recipient_id,
-                Integration.platform == platform,
-                Integration.status == "active"
-            ).first()
-            if integration:
-                business = db.query(Business).filter(
-                    Business.id == integration.business_id
-                ).first()
+        business = find_business_for_recipient(
+            db,
+            platform,
+            recipient_id,
+        )
 
         # 2. Prevent fallback to first business (Security Fix)
         if not business:

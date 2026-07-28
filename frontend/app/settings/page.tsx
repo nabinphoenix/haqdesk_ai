@@ -28,6 +28,12 @@ export default function SettingsPage() {
   });
 
   const [integrations, setIntegrations] = useState<any[]>([]);
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [showEmailSetup, setShowEmailSetup] = useState(false);
+  const [emailSetup, setEmailSetup] = useState({
+    email: "",
+    app_password: "",
+  });
   const [notifications, setNotifications] = useState({
     new_message: true,
     urgent_sentiment: true,
@@ -78,7 +84,7 @@ export default function SettingsPage() {
           const res = await fetchWithAuth("/api/v1/integrations");
           if (res.ok) {
             const data = await res.json();
-            setIntegrations(data);
+            setIntegrations(Array.isArray(data.integrations) ? data.integrations : []);
           }
         } catch (e) {
           console.error("Failed to load integrations", e);
@@ -116,6 +122,49 @@ export default function SettingsPage() {
       localStorage.setItem("notificationPrefs", JSON.stringify(updated));
       return updated;
     });
+  };
+
+  const connectPlatform = async (platform: string) => {
+    if (platform === "email") {
+      setShowEmailSetup(true);
+      return;
+    }
+    setConnectingPlatform(platform);
+    try {
+      const res = await fetchWithAuth(`/api/v1/integrations/${platform}/connect`);
+      const data = await res.json();
+      if (!res.ok || !data.auth_url) {
+        throw new Error(data.detail || `Could not connect ${platform}`);
+      }
+      window.location.href = data.auth_url;
+    } catch (error: any) {
+      toast.error(error.message || `Could not connect ${platform}`);
+      setConnectingPlatform(null);
+    }
+  };
+
+  const configureEmail = async () => {
+    setConnectingPlatform("email");
+    try {
+      const res = await fetchWithAuth("/api/v1/integrations/email/configure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(emailSetup),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Email connection failed");
+      setIntegrations(prev => [
+        ...prev.filter(item => item.platform !== "email"),
+        data,
+      ]);
+      setEmailSetup({ email: "", app_password: "" });
+      setShowEmailSetup(false);
+      toast.success("Support email connected");
+    } catch (error: any) {
+      toast.error(error.message || "Email connection failed");
+    } finally {
+      setConnectingPlatform(null);
+    }
   };
 
   return (
@@ -321,17 +370,67 @@ export default function SettingsPage() {
                               )}
                             </div>
                           </div>
-                          <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${
+                          <button
+                            type="button"
+                            onClick={() => connectPlatform(platform)}
+                            disabled={connectingPlatform === platform}
+                            className={`text-[10px] font-black px-3 py-2 rounded-full border transition-all ${
                             isConnected
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                              : "bg-[#6D4AE2]/20 text-[#A5B4FC] border-[#6D4AE2]/40 hover:bg-[#6D4AE2]/30"
                           }`}>
-                            {isConnected ? "Connected" : "Not connected"}
-                          </span>
+                            {connectingPlatform === platform
+                              ? "Connecting..."
+                              : isConnected
+                                ? "Reconnect"
+                                : "Connect"}
+                          </button>
                         </div>
                       );
                     })}
                   </div>
+                  {showEmailSetup && (
+                    <div className="mt-5 p-5 rounded-2xl border border-[#6D4AE2]/30 bg-[#6D4AE2]/10 space-y-4">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">Connect Gmail support inbox</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Use a Google App Password, not your normal Gmail password.
+                          IMAP must be enabled for this mailbox.
+                        </p>
+                      </div>
+                      <input
+                        type="email"
+                        value={emailSetup.email}
+                        onChange={event => setEmailSetup(prev => ({ ...prev, email: event.target.value }))}
+                        placeholder="support@yourbusiness.com"
+                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-white/5 text-sm text-foreground outline-none"
+                      />
+                      <input
+                        type="password"
+                        value={emailSetup.app_password}
+                        onChange={event => setEmailSetup(prev => ({ ...prev, app_password: event.target.value }))}
+                        placeholder="16-character Google App Password"
+                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-white/5 text-sm text-foreground outline-none"
+                      />
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={configureEmail}
+                          disabled={!emailSetup.email || !emailSetup.app_password || connectingPlatform === "email"}
+                          className="px-4 py-2 rounded-xl bg-[#6D4AE2] text-white text-[11px] font-bold disabled:opacity-50"
+                        >
+                          {connectingPlatform === "email" ? "Validating..." : "Validate & Connect"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailSetup(false)}
+                          className="px-4 py-2 rounded-xl bg-white/5 text-slate-300 text-[11px] font-bold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 

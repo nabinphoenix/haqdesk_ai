@@ -7,17 +7,31 @@ def build_system_prompt(
     sentiment: Optional[str] = None,
     platform: Optional[str] = None,
     customer_name: Optional[str] = None,
+    business_name: str = "the business",
 ) -> str:
     """
     Unified System Prompt Builder for HaqDesk AI RAG system.
     Shared by both Auto AI Mode and Draft-for-Review Mode.
     """
     mode_framing = (
-        "You are a friendly, expert AI customer support assistant for TechSuru, an electronics sales and repair store. "
+        f"You are a friendly, expert AI customer support assistant for {business_name}. "
         "Your responses will be sent directly to the customer."
         if mode == "auto" else
         "You are HaqDesk AI, an advanced customer-support assistant generating a draft reply for a human representative to review. "
         "Assist the representative with an accurate draft."
+    )
+    is_techsuru = business_name.lower().replace(" ", "") == "techsuru"
+    product_policy_instruction = (
+        """
+2. TECHSURU PRODUCT POLICIES:
+   - TechSuru does not sell third-hand or unverified products.
+   - TechSuru sells genuine new and certified second-hand/refurbished electronics.
+   - TechSuru buys or trades in quality second-hand devices after physical inspection."""
+        if is_techsuru else
+        """
+2. BUSINESS-SPECIFIC POLICIES:
+   - Do not assume what this business sells or what its policies are.
+   - Use only the supplied knowledge-base context. If the context does not answer the question, say that the information needs confirmation from the support team."""
     )
 
     lang_instruction = {
@@ -68,13 +82,10 @@ def build_system_prompt(
 
 RULES FOR RESPONSE GENERATION:
 1. GREETINGS vs DIRECT QUESTIONS:
-   - GREETING-ONLY MESSAGES: Use the required personalized or generic greeting below, then warmly ask how TechSuru can help with laptops, smartphones, accessories, or repair services.
+   - GREETING-ONLY MESSAGES: Use the required personalized or generic greeting below, then warmly ask how {business_name} can help.
    - DIRECT QUESTIONS: Use the required greeting below, then immediately answer the customer's exact question without a generic welcome paragraph.
 
-2. PRODUCT POLICIES (THIRD-HAND vs SECOND-HAND):
-   - THIRD-HAND PRODUCTS: TechSuru DOES NOT sell third-hand or unverified products.
-   - SECOND-HAND & NEW PRODUCTS: TechSuru sells genuine brand new electronics AND certified second-hand / refurbished electronics (laptops, mobiles, accessories) at affordable prices with warranty.
-   - BUYING SECOND-HAND: TechSuru DOES buy and trade-in quality second-hand laptops, smartphones, and devices after physical inspection at the store.
+{product_policy_instruction}
 
 3. CONVERSATION MEMORY & CONTINUATION:
    - Use the Chat History to follow up naturally. Do NOT repeat generic greetings if you are already in an ongoing discussion about a product.
@@ -107,6 +118,7 @@ def build_customer_reply_messages(
     mode: Literal["auto", "review"] = "review",
     platform: Optional[str] = None,
     customer_name: Optional[str] = None,
+    business_name: str = "the business",
 ) -> List[Dict[str, str]]:
     """
     Builds system and user message payload using the unified prompt builder.
@@ -119,6 +131,7 @@ def build_customer_reply_messages(
         sentiment=sentiment,
         platform=platform,
         customer_name=customer_name,
+        business_name=business_name,
     )
 
     user_message = f"Customer Question: {customer_message}"

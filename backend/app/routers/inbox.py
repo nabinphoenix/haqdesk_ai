@@ -15,6 +15,7 @@ from app.models.customer import Customer
 from app.models.user import User
 from app.services.messaging_service import MessagingService
 from app.models.integration import Integration
+from app.models.business import Business
 from app.core.config import settings
 
 
@@ -240,19 +241,17 @@ async def reply_to_conversation(
 
     if customer.platform == "email":
         from app.services.email_service import send_email_as_business
+        from app.services.credential_service import get_business_email_credentials
 
         customer_email = customer.platform_user_id
         if customer_email and "@" in customer_email:
-
-            # Get the business email credentials from integration or config
-            # For now use IMAP credentials since that's the business email
-            from_email = settings.TECHSURU_IMAP_EMAIL
-            from_password = settings.TECHSURU_IMAP_PASSWORD
-            from_name = "TechSuru Support"
-
-            if not from_email or not from_password:
+            credentials = get_business_email_credentials(db, conv.business_id)
+            if not credentials:
                 send_error = "Business email not configured"
             else:
+                business = db.query(Business).filter(
+                    Business.id == conv.business_id
+                ).first()
                 sent = send_email_as_business(
                     to_email=customer_email,
                     subject=subject,
@@ -265,9 +264,14 @@ async def reply_to_conversation(
                         </p>
                     </div>
                     """,
-                    from_email=from_email,
-                    from_password=from_password,
-                    from_name=from_name,
+                    from_email=credentials["email"],
+                    from_password=credentials["password"],
+                    from_name=(
+                        f"{business.name} Support"
+                        if business else "Customer Support"
+                    ),
+                    smtp_host=credentials["smtp_host"],
+                    smtp_port=credentials["smtp_port"],
                 )
                 if not sent:
                     send_error = "Failed to send email reply"
@@ -689,10 +693,12 @@ async def send_attachment(
         from email.mime.base import MIMEBase
         from email.mime.text import MIMEText
         from email import encoders
+        from app.services.credential_service import get_business_email_credentials
 
         customer_email = customer.platform_user_id
-        from_email = settings.TECHSURU_IMAP_EMAIL
-        from_password = settings.TECHSURU_IMAP_PASSWORD
+        credentials = get_business_email_credentials(db, conversation.business_id)
+        from_email = credentials["email"] if credentials else None
+        from_password = credentials["password"] if credentials else None
 
         if not from_email or not from_password:
             send_error = "Business email not configured"
@@ -713,7 +719,10 @@ async def send_attachment(
                     part.add_header("Content-Disposition", f"attachment; filename={file.filename}")
                     msg.attach(part)
 
-                with smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT) as server:
+                with smtplib.SMTP(
+                    credentials["smtp_host"],
+                    credentials["smtp_port"],
+                ) as server:
                     server.starttls()
                     server.login(from_email, from_password)
                     server.sendmail(from_email, customer_email, msg.as_string())

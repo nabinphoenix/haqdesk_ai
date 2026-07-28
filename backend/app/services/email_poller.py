@@ -15,6 +15,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.integration import Integration
 from app.services.webhook_service import process_incoming_message_in_background
+from app.services.credential_service import decrypt_secret
 
 logger = logging.getLogger("uvicorn")
 
@@ -139,12 +140,21 @@ def get_email_attachments(msg) -> list:
     return attachments
 
 
-def poll_emails_for_business(business_id: int, imap_email: str, imap_password: str):
+def poll_emails_for_business(
+    business_id: int,
+    imap_email: str,
+    imap_password: str,
+    imap_host: str = None,
+    imap_port: int = None,
+):
     """Connect to Gmail IMAP and fetch unread emails, save as messages."""
     db: Session = SessionLocal()
     try:
         # Connect to Gmail IMAP
-        mail = imaplib.IMAP4_SSL(settings.TECHSURU_IMAP_HOST, settings.TECHSURU_IMAP_PORT)
+        mail = imaplib.IMAP4_SSL(
+            imap_host or settings.TECHSURU_IMAP_HOST,
+            imap_port or settings.TECHSURU_IMAP_PORT,
+        )
         mail.login(imap_email, imap_password)
         mail.select("inbox")
 
@@ -226,6 +236,7 @@ def poll_emails_for_business(business_id: int, imap_email: str, imap_password: s
 
                 # Find or create customer
                 customer = db.query(Customer).filter(
+                    Customer.business_id == business_id,
                     Customer.platform_user_id == sender_email,
                     Customer.platform == "email"
                 ).first()
@@ -357,11 +368,58 @@ def poll_emails_for_business(business_id: int, imap_email: str, imap_password: s
         db.close()
 
 
+def build_email_poll_configs(db):
+    """Build isolated polling configurations from active integrations."""
+    integrations = db.query(Integration).filter(
+        Integration.platform == "email",
+        Integration.status == "active",
+    ).all()
+    configured_business_ids = set()
+    configs = []
+    for integration in integrations:
+        metadata = integration.metadata_json or {}
+        try:
+            configs.append({
+                "business_id": integration.business_id,
+                "imap_email": metadata.get("email") or integration.page_id,
+                "imap_password": decrypt_secret(
+                    metadata.get("password_encrypted")
+                ),
+                "imap_host": metadata.get("imap_host", "imap.gmail.com"),
+                "imap_port": int(metadata.get("imap_port", 993)),
+            })
+            configured_business_ids.add(integration.business_id)
+        except Exception as exc:
+            logger.error(
+                "[EMAIL POLL] Invalid stored email integration %s: %s",
+                integration.id,
+                exc,
+            )
+
+    # Preserve TechSuru until its working environment configuration is
+    # intentionally migrated into the integrations table.
+    if (
+        1 not in configured_business_ids
+        and settings.TECHSURU_IMAP_EMAIL
+        and settings.TECHSURU_IMAP_PASSWORD
+    ):
+        configs.append({
+            "business_id": 1,
+            "imap_email": settings.TECHSURU_IMAP_EMAIL,
+            "imap_password": settings.TECHSURU_IMAP_PASSWORD,
+            "imap_host": settings.TECHSURU_IMAP_HOST,
+            "imap_port": settings.TECHSURU_IMAP_PORT,
+        })
+    return configs
+
+
 def run_email_poll():
-    """Entry point called by the scheduler — polls all configured business emails."""
-    if settings.TECHSURU_IMAP_EMAIL and settings.TECHSURU_IMAP_PASSWORD:
-        poll_emails_for_business(
-            business_id=1,
-            imap_email=settings.TECHSURU_IMAP_EMAIL,
-            imap_password=settings.TECHSURU_IMAP_PASSWORD,
-        )
+    """Poll all active business email integrations."""
+    db = SessionLocal()
+    try:
+        configs = build_email_poll_configs(db)
+    finally:
+        db.close()
+
+    for config in configs:
+        poll_emails_for_business(**config)

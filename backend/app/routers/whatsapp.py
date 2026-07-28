@@ -15,6 +15,7 @@ from app.services.messaging_service import MessagingService
 from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.message import Message
+from app.models.integration import Integration
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
@@ -93,8 +94,21 @@ async def send_message(
     if customer.platform != "whatsapp":
         raise HTTPException(status_code=400, detail="Conversation is not a WhatsApp conversation")
 
-    access_token = settings.WHATSAPP_ACCESS_TOKEN
-    phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
+    integration = db.query(Integration).filter(
+        Integration.business_id == conversation.business_id,
+        Integration.platform == "whatsapp",
+        Integration.status == "active",
+    ).first()
+    if integration:
+        access_token = integration.access_token
+        metadata = integration.metadata_json or {}
+        phone_number_id = metadata.get("phone_number_id") or integration.page_id
+    elif conversation.business_id == 1:
+        access_token = settings.WHATSAPP_ACCESS_TOKEN
+        phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
+    else:
+        access_token = None
+        phone_number_id = None
     if not access_token or not phone_number_id:
         raise HTTPException(status_code=500, detail="WhatsApp credentials not configured")
 
