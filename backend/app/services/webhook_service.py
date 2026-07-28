@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import threading
+import traceback
 import httpx
 
 from fastapi import BackgroundTasks
@@ -14,6 +15,12 @@ from app.models.customer import Customer
 from app.models.integration import Integration
 from app.models.message import Message
 from app.services.rag_service import rag_service
+from app.services.reply_formatter import (
+    email_html,
+    ensure_signature,
+    structured_plain_text,
+    usable_customer_name,
+)
 from app.services.sentiment_service import detect_sentiment
 
 logger = logging.getLogger("uvicorn")
@@ -21,7 +28,13 @@ logger = logging.getLogger("uvicorn")
 
 from datetime import datetime, timezone
 
-async def process_incoming_message_in_background(message_id: int, conversation_id: int, message_text: str, business_id: int):
+async def process_incoming_message_in_background(
+    message_id: int,
+    conversation_id: int,
+    message_text: str,
+    business_id: int,
+    reply_subject: str = None,
+):
     """
     Analyzes the message for language and sentiment (BERT),
     queries the RAG knowledge base, generates an AI draft reply,
@@ -40,6 +53,16 @@ async def process_incoming_message_in_background(message_id: int, conversation_i
         # 3. Fetch business AI response mode (auto vs review)
         business = db.query(Business).filter(Business.id == business_id).first()
         mode = (business.ai_response_mode if business and business.ai_response_mode else "review").lower()
+        msg = db.query(Message).filter(Message.id == message_id).first()
+        platform = (msg.platform if msg and msg.platform else "plain_text").lower()
+        conversation = db.query(Conversation).filter(
+            Conversation.id == conversation_id
+        ).first()
+        customer = (
+            db.query(Customer).filter(Customer.id == conversation.customer_id).first()
+            if conversation else None
+        )
+        customer_name = usable_customer_name(customer.display_name if customer else None)
 
         # 4. Query RAG with conversation memory history context and business mode
         rag_result = await rag_service.query(
@@ -50,17 +73,18 @@ async def process_incoming_message_in_background(message_id: int, conversation_i
             mode=mode,
             db=db,
             language=language,
-            sentiment=sentiment
+            sentiment=sentiment,
+            platform=platform,
+            customer_name=customer_name,
         )
         
         draft = None
         metadata = None
         if rag_result and rag_result.get("answer"):
-            draft = rag_result["answer"]
+            draft = ensure_signature(rag_result["answer"])
             metadata = rag_result.get("metadata")
 
         # 5. Update the original customer message in the database with the metadata
-        msg = db.query(Message).filter(Message.id == message_id).first()
         if msg:
             msg.ai_draft = draft
             msg.ai_language = language
@@ -74,11 +98,18 @@ async def process_incoming_message_in_background(message_id: int, conversation_i
             if mode == "auto":
                 # AUTO MODE: Instantly send response back to customer on platform
                 logger.info(f"🤖 [AUTO MODE] Sending AI response automatically for conversation {conversation_id}")
-                # Clear ai_draft on customer message in Auto Mode so UI renders only the auto-sent message bubble
+                await dispatch_auto_ai_reply(
+                    db,
+                    conversation_id,
+                    business_id,
+                    draft,
+                    reply_subject=reply_subject,
+                )
+                # Clear the draft only after delivery succeeds; on failure it
+                # remains available for an agent to review/retry.
                 if msg:
                     msg.ai_draft = None
                     db.commit()
-                await dispatch_auto_ai_reply(db, conversation_id, business_id, draft)
             else:
                 # REVIEW MODE: Create a sender_type="ai" pending message for human review
                 # First clean up any old unread/unacted AI messages in this conversation to avoid duplicates
@@ -104,15 +135,21 @@ async def process_incoming_message_in_background(message_id: int, conversation_i
         db.close()
 
 
-async def dispatch_auto_ai_reply(db: Session, conversation_id: int, business_id: int, reply_text: str):
+async def dispatch_auto_ai_reply(
+    db: Session,
+    conversation_id: int,
+    business_id: int,
+    reply_text: str,
+    reply_subject: str = None,
+):
     """Internal helper to dispatch AI reply automatically when in auto mode."""
     try:
         conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
         if not conv:
-            return
+            raise ValueError(f"Conversation {conversation_id} not found")
         customer = db.query(Customer).filter(Customer.id == conv.customer_id).first()
         if not customer:
-            return
+            raise ValueError(f"Customer for conversation {conversation_id} not found")
 
         # Fetch integration token
         integration = db.query(Integration).filter(
@@ -152,33 +189,44 @@ async def dispatch_auto_ai_reply(db: Session, conversation_id: int, business_id:
                 from_email = settings.TECHSURU_IMAP_EMAIL
                 from_password = settings.TECHSURU_IMAP_PASSWORD
                 if from_email and from_password:
-                    send_email_as_business(
+                    sent = send_email_as_business(
                         to_email=customer_email,
-                        subject="Re: TechSuru Support",
-                        html_body=f"""
-                        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
-                            <p style="font-size: 15px; line-height: 1.6; color: #333;">{reply_text}</p>
-                            <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
-                            <p style="color: #888; font-size: 12px; margin-top: 12px;">
-                                Automated AI Response · TechSuru Customer Support
-                            </p>
-                        </div>
-                        """,
+                        subject=reply_subject or "Re: TechSuru Support",
+                        html_body=email_html(reply_text),
                         from_email=from_email,
                         from_password=from_password,
                         from_name="TechSuru Support"
                     )
-        else:
-            if access_token:
-                await messaging_service.send_message(
-                    platform=customer.platform,
-                    access_token=access_token,
-                    recipient_id=customer.platform_user_id,
-                    message_text=reply_text,
-                    metadata=meta
+                    if not sent:
+                        raise RuntimeError(
+                            f"SMTP rejected auto reply to {customer_email}"
+                        )
+                else:
+                    raise ValueError("Business email SMTP credentials are not configured")
+            else:
+                raise ValueError(
+                    f"Invalid email recipient for conversation {conversation_id}"
                 )
+        else:
+            if not access_token:
+                raise ValueError(
+                    f"No access token configured for {customer.platform} "
+                    f"(business_id={business_id})"
+                )
+            delivery_result = await messaging_service.send_message(
+                platform=customer.platform,
+                access_token=access_token,
+                recipient_id=customer.platform_user_id,
+                message_text=structured_plain_text(reply_text),
+                metadata=meta
+            )
+            logger.info(
+                "[AUTO MODE] Platform accepted reply for conversation %s: %s",
+                conversation_id,
+                delivery_result,
+            )
 
-        # Record auto-sent message in database as "agent" (already sent, not a draft)
+        # Record the sent bubble only after the channel confirms acceptance.
         auto_msg = Message(
             conversation_id=conversation_id,
             sender_type="agent",
@@ -190,7 +238,14 @@ async def dispatch_auto_ai_reply(db: Session, conversation_id: int, business_id:
         db.commit()
         logger.info(f"✅ [AUTO MODE] Response sent and recorded for conversation {conversation_id}")
     except Exception as e:
-        logger.error(f"❌ [AUTO MODE] Failed to dispatch auto reply: {e}")
+        db.rollback()
+        logger.error(
+            "❌ [AUTO MODE] Failed to dispatch auto reply for conversation %s: %s\n%s",
+            conversation_id,
+            e,
+            traceback.format_exc(),
+        )
+        raise
 
 
 class WebhookService:
@@ -478,14 +533,31 @@ class WebhookService:
             db.commit()
             db.refresh(customer)
         
-        # Resolve effective customer ID if merged
-        effective_customer_id = customer.merged_into_id if (customer and customer.is_merged and customer.merged_into_id) else customer.id
+        # Resolve the canonical customer and include same-channel aliases merged
+        # into it. Older conversations can still reference the alias record.
+        effective_customer_id = (
+            customer.merged_into_id
+            if (customer and customer.is_merged and customer.merged_into_id)
+            else customer.id
+        )
+        conversation_customer_ids = [
+            row[0] for row in db.query(Customer.id).filter(
+                Customer.business_id == business.id,
+                Customer.platform == platform,
+                (
+                    (Customer.id == effective_customer_id)
+                    | (Customer.merged_into_id == effective_customer_id)
+                ),
+            ).all()
+        ]
+        if effective_customer_id not in conversation_customer_ids:
+            conversation_customer_ids.append(effective_customer_id)
 
         # 3. Find or Create Conversation
         conversation = db.query(Conversation).filter(
-            Conversation.customer_id == effective_customer_id,
+            Conversation.customer_id.in_(conversation_customer_ids),
             Conversation.business_id == business.id,
-        ).order_by(Conversation.created_at.desc()).first()
+        ).order_by(Conversation.created_at.asc()).first()
 
         if conversation:
             # Auto-restore if it was soft-deleted

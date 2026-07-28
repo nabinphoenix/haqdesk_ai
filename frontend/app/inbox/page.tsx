@@ -237,8 +237,20 @@ export default function InboxPage() {
                 const isCurrentlyOpenConversation = conv.id === selectedConvIdRef.current;
 
                 if (hasNewActivity && isFromCustomer && !isCurrentlyOpenConversation) {
-                    // Something changed in this conversation since last poll — play sound
+                    // Something changed in this conversation since last poll — play sound and show toast
                     playNotificationSound();
+                    
+                    // Show a toast notification
+                    const previewText = conv.last_message || "New message received";
+                    const senderName = conv.customer_name || "Customer";
+                    toast.info(`New message from ${senderName}`, {
+                        description: previewText.substring(0, 50) + (previewText.length > 50 ? "..." : ""),
+                        duration: 5000,
+                        action: {
+                            label: "View",
+                            onClick: () => setSelectedConvId(conv.id)
+                        }
+                    });
                 }
                 previousMessageCountRef.current.set(key, currentTime);
             });

@@ -530,6 +530,11 @@ export default function ChatWindow({
                 });
                 if (res.ok) {
                     const savedMessage = await res.json();
+                    
+                    if (savedMessage.error) {
+                        toast.error(`Message saved but not delivered: ${savedMessage.error}`);
+                    }
+
                     setMessages(prev => prev.map(m =>
                         m.id === tempId
                             ? {

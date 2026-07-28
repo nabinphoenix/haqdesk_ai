@@ -1,5 +1,6 @@
 import imaplib
 import email
+import asyncio
 from email.header import decode_header
 import logging
 import os
@@ -13,6 +14,7 @@ from app.models.customer import Customer
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.integration import Integration
+from app.services.webhook_service import process_incoming_message_in_background
 
 logger = logging.getLogger("uvicorn")
 
@@ -316,8 +318,32 @@ def poll_emails_for_business(business_id: int, imap_email: str, imap_password: s
                     db.commit()
                     logger.info(f"[EMAIL POLL] Saved attachment '{filename}' as message {att_message.id}")
 
+                # Use the same mode-aware RAG/dispatch pipeline as Messenger
+                # and Instagram. In auto mode it sends via SMTP; in review
+                # mode it creates an AI suggestion for an agent.
+                logger.info(
+                    "[EMAIL POLL] Triggering AI pipeline for message %s "
+                    "(conversation=%s, business=%s)",
+                    new_message.id,
+                    conversation.id,
+                    business_id,
+                )
+                asyncio.run(
+                    process_incoming_message_in_background(
+                        new_message.id,
+                        conversation.id,
+                        body,
+                        business_id,
+                        reply_subject=f"Re: {subject}",
+                    )
+                )
+
             except Exception as e:
-                logger.error(f"[EMAIL POLL] Error processing email {email_id}: {e}")
+                logger.exception(
+                    "[EMAIL POLL] Error processing email %s: %s",
+                    email_id,
+                    e,
+                )
                 db.rollback()
                 continue
 

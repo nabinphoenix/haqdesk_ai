@@ -8,6 +8,35 @@ from typing import Dict, Optional
 
 logger = logging.getLogger("uvicorn")
 
+class MessageDeliveryError(RuntimeError):
+    """Raised when a channel API does not confirm message acceptance."""
+
+    def __init__(self, platform: str, status_code: int, response_body):
+        self.platform = platform
+        self.status_code = status_code
+        self.response_body = response_body
+        super().__init__(f"{platform} delivery failed (HTTP {status_code}): {response_body}")
+
+
+def _validated_meta_response(platform: str, response: httpx.Response) -> Dict:
+    try:
+        result = response.json()
+    except ValueError:
+        result = {"raw_body": response.text}
+
+    logger.info(
+        "[%s SEND] Meta response (HTTP %s): %s",
+        platform.upper(),
+        response.status_code,
+        result,
+    )
+    if not response.is_success or not isinstance(result, dict) or result.get("error"):
+        raise MessageDeliveryError(platform, response.status_code, result)
+    if platform in ("facebook", "instagram") and not result.get("message_id"):
+        raise MessageDeliveryError(platform, response.status_code, result)
+    return result
+
+
 class MessagingService:
     """Handles outbound messaging to social platforms"""
     
@@ -29,9 +58,7 @@ class MessagingService:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, params=params)
-            result = response.json()
-            logger.info(f"[FACEBOOK SEND] Meta response (HTTP {response.status_code}): {result}")
-            return result
+            return _validated_meta_response("facebook", response)
     
     async def send_instagram_message(self, access_token: str, recipient_id: str, message_text: str, page_id: Optional[str] = None) -> Dict:
         """
@@ -61,9 +88,7 @@ class MessagingService:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, params=params)
-            result = response.json()
-            logger.info(f"[INSTAGRAM SEND] Meta response (HTTP {response.status_code}): {result}")
-            return result
+            return _validated_meta_response("instagram", response)
     
     async def send_whatsapp_message(self, access_token: str, phone_number_id: str, to: str, message_text: str) -> Dict:
         """Send message via WhatsApp Cloud API"""
@@ -88,9 +113,7 @@ class MessagingService:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(url, json=payload, headers=headers)
-            result = response.json()
-            logger.info(f"[WHATSAPP SEND] Meta response (HTTP {response.status_code}): {result}")
-            return result
+            return _validated_meta_response("whatsapp", response)
     
     async def send_message(self, platform: str, access_token: str, recipient_id: str, message_text: str, metadata: Optional[Dict] = None) -> Dict:
         """Universal message sender - routes to appropriate platform"""

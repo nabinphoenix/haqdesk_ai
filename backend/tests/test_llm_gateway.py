@@ -109,6 +109,17 @@ def test_prompt_builder_warnings():
     system_prompt = messages[0]["content"]
     assert "hallucinate" in system_prompt or "unsupported" in system_prompt.lower() or "context below" in system_prompt.lower()
 
+
+def test_prompt_assigns_signature_to_application_not_llm():
+    prompt = build_system_prompt(
+        context="Delivery is available.",
+        mode="auto",
+        platform="email",
+        customer_name="Alex Morgan",
+    )
+    assert "Do NOT write any closing sign-off or signature" in prompt
+    assert "application appends the single approved signature" in prompt
+
 # 7. Preflight does not expose secret values.
 def test_preflight_does_not_expose_secrets():
     with patch("app.core.preflight.check_database", return_value=True), \

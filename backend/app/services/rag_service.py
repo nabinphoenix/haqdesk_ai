@@ -16,6 +16,7 @@ from app.models.message import Message
 from app.services.nepali_normalizer import normalize_nepali_text, get_embedding_input
 from app.services.qa_parser import parse_qa_pairs
 from app.prompts.customer_reply_prompt import build_system_prompt
+from app.services.llm_gateway import llm_gateway
 
 logger = logging.getLogger("uvicorn")
 
@@ -333,6 +334,8 @@ class RAGService:
         confidence_threshold: float = CONFIDENCE_THRESHOLD,
         language: Optional[str] = None,
         sentiment: Optional[str] = None,
+        platform: Optional[str] = None,
+        customer_name: Optional[str] = None,
         **kwargs
     ) -> Optional[dict]:
         """Full RAG pipeline: retrieve → generate → return answer with context memory."""
@@ -359,13 +362,13 @@ class RAGService:
                 top_score = max(top_score, 0.75)
 
             # 2. Build system prompt using unified prompt builder (Fix 4)
-            from app.services.llm_gateway import llm_gateway
-
             system_prompt = build_system_prompt(
                 context=context,
                 mode=mode,
                 language=detected_lang,
-                sentiment=sentiment
+                sentiment=sentiment,
+                platform=platform,
+                customer_name=customer_name,
             )
 
             # 3. Retrieve conversation history with current_message_id exclusion (Fix 1)
@@ -418,7 +421,8 @@ class RAGService:
             }
 
         except Exception as e:
-            logger.error(f"[RAG] Query failed: {e}")
+            import traceback
+            logger.error(f"[RAG] Query failed:\n{traceback.format_exc()}")
             lang = language or "english"
             fallback_answer = "Hajur! TechSuru support ma swagat xa. Tapailai laptop, mobile, accessories, kinne wa repair garne sambandhi k jankari chainchha?" if lang == "romanized_nepali" else "Hello! Welcome to TechSuru support. How can we help you today with our laptops, electronics, or repair services?"
             return {

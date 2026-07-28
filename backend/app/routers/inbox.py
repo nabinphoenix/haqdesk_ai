@@ -318,7 +318,7 @@ async def reply_to_conversation(
         "content": new_message.content,
         "sender_type": new_message.sender_type,
         "timestamp": new_message.timestamp.isoformat(),
-        "send_error": send_error
+        "error": send_error
     }
     
     return result
