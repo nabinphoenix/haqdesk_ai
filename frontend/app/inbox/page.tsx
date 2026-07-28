@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ChatWindow from "@/components/chat/ChatWindow";
 import CustomerSidebar from "@/components/chat/CustomerSidebar";
 import { fetchWithAuth } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import {
     Search,
     MessageSquare,
@@ -16,12 +17,15 @@ import {
     Inbox,
     Zap,
     RefreshCw,
+    Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Conversation {
     id: number;
     customer_name: string;
+    customer_email?: string;
     customer_id: string;
     last_message: string;
     time: string;
@@ -29,6 +33,7 @@ interface Conversation {
     status: string;
     platform: string;
     unread?: number;
+    priority?: string;
 }
 
 // ── Platform config ────────────────────────────────────────────────────────────
@@ -127,11 +132,74 @@ export default function InboxPage() {
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformKey>("all");
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
+    const selectedConvIdRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        selectedConvIdRef.current = selectedConvId;
+    }, [selectedConvId]);
     const [search, setSearch] = useState("");
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showCustomerPanel, setShowCustomerPanel] = useState(true);
-    const [readConversationIds, setReadConversationIds] = useState<Set<number>>(new Set());
+    const [deletedConversations, setDeletedConversations] = useState<any[]>([]);
+    const [showDeleted, setShowDeleted] = useState(false);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [aiMode, setAiMode] = useState<"auto" | "review">("review");
+    const [isLoading, setIsLoading] = useState(true);
+
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const previousMessageCountRef = useRef<Map<number, string>>(new Map());
+
+    useEffect(() => {
+        audioRef.current = new Audio("/audio/sound_notification_haqdeskAI.mp3");
+        audioRef.current.volume = 0.6;
+    }, []);
+
+    const playNotificationSound = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch((err) => {
+                console.warn("Audio play blocked or failed:", err);
+            });
+        }
+    }, []);
+
+    const fetchAiMode = useCallback(async () => {
+        try {
+            const res = await fetchWithAuth("/api/v1/settings/business");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.ai_response_mode) {
+                    setAiMode(data.ai_response_mode);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch AI mode:", e);
+        }
+    }, []);
+
+    const handleToggleAiMode = async () => {
+        const nextMode = aiMode === "auto" ? "review" : "auto";
+        setAiMode(nextMode);
+        try {
+            const res = await fetchWithAuth("/api/v1/settings/business", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ai_response_mode: nextMode }),
+            });
+            if (res.ok) {
+                toast.success(`AI Mode set to ${nextMode === "auto" ? "Auto AI Mode" : "Review Mode"}`);
+            } else {
+                setAiMode(aiMode);
+                toast.error("Failed to update AI mode");
+            }
+        } catch (e) {
+            setAiMode(aiMode);
+            toast.error("Network error updating AI mode");
+        }
+    };
 
     const fetchConversations = useCallback(async () => {
         try {
@@ -156,16 +224,43 @@ export default function InboxPage() {
             const data = await response.json();
             console.log("Conversations response:", data);
             
-            setConversations(data.map((c: any) => ({
+            // Detect new incoming customer messages for sound notification
+            data.forEach((conv: any) => {
+                const key = Number(conv.id);
+                const prevTime = previousMessageCountRef.current.get(key);
+                const currentTime = conv.time;
+
+                const isFirstLoad = prevTime === undefined;
+                const hasNewActivity = !isFirstLoad && prevTime !== currentTime;
+
+                const isFromCustomer = conv.last_message_sender_type === "customer";
+                const isCurrentlyOpenConversation = conv.id === selectedConvIdRef.current;
+
+                if (hasNewActivity && isFromCustomer && !isCurrentlyOpenConversation) {
+                    // Something changed in this conversation since last poll — play sound
+                    playNotificationSound();
+                }
+                previousMessageCountRef.current.set(key, currentTime);
+            });
+
+            const mappedData = data.map((c: any) => ({
                 ...c,
                 rawTime: c.time,
                 time: relativeTime(c.time),
-                unread: Math.random() > 0.6 ? Math.floor(Math.random() * 5) + 1 : 0,
-            })));
+                unread: c.unread ?? 0,
+            }));
+
+            setConversations(prev => {
+                const isDifferent = JSON.stringify(prev.map(p => ({ id: p.id, last_message: p.last_message, unread: p.unread, status: p.status, rawTime: p.rawTime }))) !==
+                                     JSON.stringify(mappedData.map((d: any) => ({ id: d.id, last_message: d.last_message, unread: d.unread, status: d.status, rawTime: d.rawTime })));
+                return isDifferent ? mappedData : prev;
+            });
         } catch (e) {
             console.error("Failed to fetch conversations:", e);
+        } finally {
+            setIsLoading(false);
         }
-    }, [router]);
+    }, [router, playNotificationSound]);
 
     // Auth guard
     useEffect(() => {
@@ -173,6 +268,7 @@ export default function InboxPage() {
         if (!token) { router.push("/login"); return; }
         setIsAuth(true);
         fetchConversations();
+        fetchAiMode();
         
         const interval = setInterval(fetchConversations, 3000);
         
@@ -184,7 +280,83 @@ export default function InboxPage() {
             clearInterval(interval);
             window.removeEventListener('customerLinked', handleLinkEvent);
         };
-    }, [router, fetchConversations]);
+    }, [router, fetchConversations, fetchAiMode]);
+
+    const handleDeleteConversation = (conversationId: number) => {
+        setConfirmDeleteId(conversationId);
+    };
+
+    const executeDeleteConversation = async () => {
+        if (confirmDeleteId === null) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetchWithAuth(`/api/v1/inbox/conversations/${confirmDeleteId}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                setConversations(prev => prev.filter(c => c.id !== confirmDeleteId));
+                if (selectedConvId === confirmDeleteId) {
+                    setSelectedConvId(null);
+                }
+                toast.success("Conversation deleted");
+                fetchDeletedConversations();
+            } else {
+                toast.error("Failed to delete conversation");
+            }
+        } catch (e) {
+            toast.error("Network error");
+        } finally {
+            setIsDeleting(false);
+            setConfirmDeleteId(null);
+        }
+    };
+
+    const fetchDeletedConversations = async () => {
+        try {
+            const res = await fetchWithAuth("/api/v1/inbox/conversations/deleted");
+            if (res.ok) {
+                const data = await res.json();
+                setDeletedConversations(data);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    const handleRestoreConversation = async (conversationId: number) => {
+        try {
+            const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/restore`, {
+                method: "POST",
+            });
+            if (res.ok) {
+                setDeletedConversations(prev => prev.filter(c => c.id !== conversationId));
+                fetchConversations();
+                toast.success("Conversation restored");
+            }
+        } catch (e) { toast.error("Restore failed"); }
+    };
+
+    useEffect(() => {
+        if (showDeleted) {
+            fetchDeletedConversations();
+        }
+    }, [showDeleted]);
+
+    const handleUpdatePriority = async (conversationId: number, priority: string) => {
+        try {
+            const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ priority }),
+            });
+            if (res.ok) {
+                setConversations(prev => prev.map(c =>
+                    c.id === conversationId ? { ...c, priority } : c
+                ));
+                toast.success(`Priority set to ${priority}`);
+            }
+        } catch (e) {
+            console.error("Priority update failed:", e);
+        }
+    };
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -211,6 +383,16 @@ export default function InboxPage() {
 
     return (
         <div className="h-full flex overflow-hidden">
+            <ConfirmModal
+                isOpen={confirmDeleteId !== null}
+                title="Delete Conversation"
+                message="This conversation and all its messages will be permanently deleted. This action cannot be undone."
+                confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+                cancelLabel="Cancel"
+                onConfirm={executeDeleteConversation}
+                onCancel={() => setConfirmDeleteId(null)}
+                isDangerous={true}
+            />
 
             {/* ── COL 1: Platform icon rail ─────────────────────────────────── */}
             <div className="w-[72px] shrink-0 flex flex-col items-center py-4 gap-2 border-r border-[var(--border)] bg-[var(--surface)] z-30">
@@ -272,7 +454,7 @@ export default function InboxPage() {
                 `}
             >
                 {/* Header */}
-                <div className="px-4 pt-5 pb-3 border-b border-[var(--border)]">
+                <div className="px-4 pt-4 pb-3 border-b border-[var(--border)]">
                     <div className="flex items-center justify-between mb-3">
                         <div>
                             <h1 className="text-[15px] font-bold text-[var(--text-primary)] tracking-tight">
@@ -282,14 +464,18 @@ export default function InboxPage() {
                                 {filtered.length} conversation{filtered.length !== 1 ? "s" : ""}
                             </p>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all">
-                                <Filter size={13} />
-                            </button>
-                            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all">
-                                <Users size={13} />
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleToggleAiMode}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${
+                                aiMode === "auto"
+                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
+                                    : "bg-[#6D4AE2]/15 border-[#6D4AE2]/40 text-[#818CF8] hover:bg-[#6D4AE2]/25"
+                            }`}
+                            title="Toggle between Autonomous Auto-Send and Manual Review Mode"
+                        >
+                            <Zap size={12} strokeWidth={2.5} />
+                            {aiMode === "auto" ? "🚀 Auto AI Mode" : "👁️ Review Mode"}
+                        </button>
                     </div>
 
                     {/* Search */}
@@ -308,11 +494,84 @@ export default function InboxPage() {
                             }}
                         />
                     </div>
+
+                    {/* Toggle between All and Deleted */}
+                    <div className="flex items-center gap-2 mt-3 bg-[var(--surface-wash)] p-1 rounded-xl border border-[var(--border)]">
+                        <button
+                            onClick={() => setShowDeleted(false)}
+                            className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                                !showDeleted
+                                    ? "bg-[#6D4AE2] text-white shadow-sm"
+                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            }`}
+                        >
+                            All ({conversations.length})
+                        </button>
+                        <button
+                            onClick={() => setShowDeleted(true)}
+                            className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                                showDeleted
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                    : "text-[var(--text-secondary)] hover:text-red-400"
+                            }`}
+                        >
+                            Deleted ({deletedConversations.length})
+                        </button>
+                    </div>
                 </div>
 
                 {/* Conversation list */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {filtered.length === 0 ? (
+                    {showDeleted ? (
+                        <div className="p-2 space-y-0.5">
+                            {deletedConversations.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-secondary)] py-12">
+                                    <Trash2 size={28} className="opacity-30" />
+                                    <p className="text-[12px] text-center">No deleted conversations</p>
+                                </div>
+                            ) : (
+                                deletedConversations.map(conv => (
+                                    <div
+                                        key={conv.id}
+                                        className="relative group flex items-center gap-3 px-3 py-3 rounded-xl border border-transparent hover:bg-white/5 transition-all"
+                                    >
+                                        {/* Avatar */}
+                                        <Avatar name={conv.customer_name} size={40} platform={conv.platform} />
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{conv.customer_name}</p>
+                                            <p className="text-[11.5px] text-[var(--text-secondary)] truncate">{conv.last_message || "No messages yet"}</p>
+                                            <p className="text-[10px] text-red-400 mt-0.5">
+                                                Deleted {conv.deleted_at ? new Date(conv.deleted_at).toLocaleDateString() : ""}
+                                            </p>
+                                        </div>
+
+                                        {/* Restore button */}
+                                        <button
+                                            onClick={() => handleRestoreConversation(conv.id)}
+                                            className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold hover:bg-purple-500/30 transition-all cursor-pointer"
+                                        >
+                                            <RefreshCw size={11} />
+                                            Restore
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    ) : isLoading ? (
+                        <div className="p-3 space-y-2.5">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--surface-wash)] animate-pulse border border-[var(--border)]">
+                                    <div className="w-10 h-10 rounded-2xl bg-[var(--border)] shrink-0 opacity-40" />
+                                    <div className="flex-1 space-y-2 min-w-0">
+                                        <div className="h-3.5 w-28 bg-[var(--border)] rounded opacity-40" />
+                                        <div className="h-2.5 w-40 bg-[var(--border)] rounded opacity-25" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : filtered.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-secondary)] p-8">
                             <MessageSquare size={28} className="opacity-30" />
                             <p className="text-[12px] text-center">No conversations found</p>
@@ -322,54 +581,106 @@ export default function InboxPage() {
                             {filtered.map(conv => {
                                 const isActive = selectedConvId === conv.id;
                                 const pColor = PLATFORM_CONFIG[conv.platform.toLowerCase() as PlatformKey]?.color || "#6D4AE2";
+                                const isUnread = (conv.unread ?? 0) > 0;
                                 return (
-                                    <motion.button
-                                        key={conv.id}
-                                        onClick={() => {
-                                            setSelectedConvId(conv.id);
-                                            setMobileView("chat");
-                                            setReadConversationIds(prev => new Set([...prev, conv.id]));
-                                        }}
-                                        whileTap={{ scale: 0.99 }}
-                                        className="w-full px-3 py-3 rounded-xl text-left transition-all duration-150 flex items-start gap-3 group"
-                                        style={{
-                                            background: isActive
-                                                ? "rgba(109,74,226,0.10)"
-                                                : "transparent",
-                                            border: isActive
-                                                ? "1px solid rgba(109,74,226,0.20)"
-                                                : "1px solid transparent",
-                                        }}
-                                    >
-                                        <Avatar name={conv.customer_name} size={40} platform={conv.platform} />
+                                    <div key={conv.id} className="relative group">
+                                        <motion.div
+                                            layout
+                                            initial={false}
+                                            onClick={async () => {
+                                                setSelectedConvId(conv.id);
+                                                setMobileView("chat");
+                                                try {
+                                                    await fetchWithAuth(`/api/v1/inbox/conversations/${conv.id}/mark-read`, {
+                                                        method: "POST",
+                                                    });
+                                                    setConversations(prev => prev.map(c =>
+                                                        c.id === conv.id ? { ...c, unread: 0 } : c
+                                                    ));
+                                                } catch (e) {
+                                                    console.error("Failed to mark conversation as read:", e);
+                                                }
+                                            }}
+                                            whileTap={{ scale: 0.99 }}
+                                            className="w-full px-3 py-3 rounded-xl text-left cursor-pointer transition-all duration-150 flex items-start gap-3"
+                                            style={{
+                                                background: isActive
+                                                    ? "rgba(109,74,226,0.10)"
+                                                    : "transparent",
+                                                border: isActive
+                                                    ? "1px solid rgba(109,74,226,0.20)"
+                                                    : "1px solid transparent",
+                                            }}
+                                        >
+                                            <Avatar name={conv.customer_name} size={40} platform={conv.platform} />
 
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between mb-0.5">
-                                                <span className="text-[13px] font-semibold text-[var(--text-primary)] truncate max-w-[140px]">
-                                                    {conv.customer_name}
-                                                </span>
-                                                <div className="flex items-center gap-1.5 shrink-0 ml-1">
-                                                    <span className="text-[10px] text-[var(--text-secondary)]">{conv.time}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-[11.5px] text-[var(--text-secondary)] truncate leading-relaxed flex-1">
-                                                    {conv.last_message || "No messages yet"}
-                                                </p>
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    <StatusDot status={conv.status} />
-                                                    {!readConversationIds.has(conv.id) && (conv.unread ?? 0) > 0 && (
-                                                        <span
-                                                            className="min-w-[18px] h-[18px] px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
-                                                            style={{ background: pColor }}
-                                                        >
-                                                            {conv.unread}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        {conv.priority && conv.priority !== "medium" && (
+                                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                                conv.priority === "urgent" ? "bg-red-500" :
+                                                                conv.priority === "high" ? "bg-orange-400" :
+                                                                conv.priority === "low" ? "bg-emerald-500" :
+                                                                "bg-yellow-400"
+                                                            }`} title={`Priority: ${conv.priority}`} />
+                                                        )}
+                                                        <span className={`text-[13px] truncate max-w-[140px] ${
+                                                            isUnread ? "font-bold text-[var(--text-primary)]" : "font-medium text-[var(--text-secondary)]"
+                                                        }`}>
+                                                            {conv.customer_name}
                                                         </span>
-                                                    )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                                                        <span className="text-[10px] text-[var(--text-secondary)]">{conv.time}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className={`text-[11.5px] truncate leading-relaxed flex-1 ${
+                                                        isUnread ? "font-semibold text-[var(--text-primary)]" : "font-normal text-[var(--text-secondary)]"
+                                                    }`}>
+                                                        {conv.last_message || "No messages yet"}
+                                                    </p>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <StatusDot status={conv.status} />
+                                                        {isUnread && (
+                                                            <span
+                                                                className="min-w-[18px] h-[18px] px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                                                                style={{ background: pColor }}
+                                                            >
+                                                                {conv.unread}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
+                                        </motion.div>
+
+                                        {/* Action buttons - show on hover */}
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-[#1a1a2e] rounded-lg p-1 border border-white/10 z-10">
+                                            {/* Priority selector */}
+                                            <select
+                                                value={conv.priority || "medium"}
+                                                onChange={(e) => handleUpdatePriority(conv.id, e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-transparent text-gray-300 border border-white/10 cursor-pointer focus:outline-none"
+                                            >
+                                                <option value="low" className="bg-[#1a1a2e] text-white">🟢 Low</option>
+                                                <option value="medium" className="bg-[#1a1a2e] text-white">🟡 Medium</option>
+                                                <option value="high" className="bg-[#1a1a2e] text-white">🟠 High</option>
+                                                <option value="urgent" className="bg-[#1a1a2e] text-white">🔴 Urgent</option>
+                                            </select>
+
+                                            {/* Delete button */}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
+                                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                title="Delete conversation"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
                                         </div>
-                                    </motion.button>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -401,6 +712,7 @@ export default function InboxPage() {
                                     customerName={selectedConv.customer_name}
                                     platform={selectedConv.platform}
                                     customerId={selectedConv.customer_id}
+                                    aiMode={aiMode}
                                     onBack={() => setMobileView("list")}
                                     showCustomerPanel={showCustomerPanel}
                                     onToggleCustomerPanel={() => setShowCustomerPanel(v => !v)}
@@ -413,6 +725,7 @@ export default function InboxPage() {
                                     <CustomerSidebar
                                         customerId={selectedConv.customer_id}
                                         platform={selectedConv.platform}
+                                        conv={selectedConv}
                                     />
                                 </div>
                             )}

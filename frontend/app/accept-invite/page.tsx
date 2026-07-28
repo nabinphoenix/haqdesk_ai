@@ -79,26 +79,17 @@ function AcceptInviteContent() {
             const res = await fetch(`${API_URL}/api/v1/team/accept-invite`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, name, email, password }),
+                body: JSON.stringify({ invite_token: token, name, email, password }),
             });
 
             const data = await res.json();
 
             if (res.ok) {
-                // Store auth data
-                localStorage.setItem("token", data.access_token);
-                localStorage.setItem("userRole", data.user.role);
-                localStorage.setItem("userName", data.user.name);
-                localStorage.setItem("userEmail", data.user.email);
-                if (data.user.business_id) {
-                    localStorage.setItem("userBusinessId", data.user.business_id);
-                }
-
                 setSuccess(true);
                 toast.success("Welcome to the team!");
 
                 setTimeout(() => {
-                    router.push("/inbox");
+                    router.push("/login");
                 }, 2000);
             } else {
                 const errorMsg = data.detail || "Failed to create account. Please try again.";
@@ -140,11 +131,12 @@ function AcceptInviteContent() {
 
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 z-10">
-                    <div className="w-9 h-9 rounded-xl bg-[#6D4AE2] flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                            <path d="M8 2L13 5.5V10.5L8 14L3 10.5V5.5L8 2Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
-                            <path d="M8 5.5L10.5 7V9L8 10.5L5.5 9V7L8 5.5Z" fill="white" />
-                        </svg>
+                    <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0 transition-transform hover:scale-105">
+                        <img
+                            src="/images/HaqDesk.png"
+                            alt="HaqDesk AI"
+                            className="w-full h-full object-contain"
+                        />
                     </div>
                     <span className="text-white font-bold text-[16px] tracking-tight">
                         HaqDesk<span className="text-[#818CF8]"> AI</span>
@@ -246,7 +238,7 @@ function AcceptInviteContent() {
                             <div>
                                 <h2 className="text-xl font-black text-white mb-2">Welcome to the team!</h2>
                                 <p className="text-[13px] text-gray-400">
-                                    Your account has been created. Redirecting to inbox...
+                                Your account has been created. Redirecting to login...
                                 </p>
                             </div>
                             <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mt-2" />

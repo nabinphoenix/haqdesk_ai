@@ -10,7 +10,6 @@ dependencies = [
     "python-multipart",
     "sqlalchemy",
     "psycopg2-binary",
-    "pgvector",
     "alembic",
     "python-jose[cryptography]",
     "passlib[bcrypt]",

@@ -142,7 +142,8 @@ export default function AppNavbar() {
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   const isDark = theme === "dark";
 
-  if (pathname === "/login" || pathname === "/register") return null;
+  const PUBLIC_PAGES = ["/login", "/register", "/accept-invite", "/forgot-password", "/reset-password"];
+  if (PUBLIC_PAGES.some((p) => pathname === p || pathname.startsWith(p + "?"))) return null;
 
   if (!mounted) {
     return <div className="fixed top-0 left-0 right-0 h-[60px] glass z-50" />;

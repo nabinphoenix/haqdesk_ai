@@ -1,33 +1,58 @@
 "use client";
 
-import { CheckCheck, User, Bot } from "lucide-react";
+import { CheckCheck, User, Bot, Paperclip, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface MessageBubbleProps {
     content: string;
     sender: "customer" | "agent" | "ai";
+    message_type?: string;
     timestamp: string;
     agentInitials?: string;
     ai_draft?: string | null;
     ai_language?: string | null;
     sentiment?: string | null;
+    ai_metadata?: any;
     onUseDraft?: (draft: string) => void;
+    isVoice?: boolean;
+    audioUrl?: string;
 }
 
 export default function MessageBubble({
     content,
     sender,
+    message_type = "text",
     timestamp,
     agentInitials = "NB",
     ai_draft,
     ai_language,
     sentiment,
+    ai_metadata,
     onUseDraft,
+    isVoice,
+    audioUrl,
 }: MessageBubbleProps) {
     // AI messages are shown only via AISuggestionBox — suppress here
     if (sender === "ai") return null;
 
     const isCustomer = sender === "customer";
+
+    const getFileUrl = (url: string) => {
+        if (!url) return "";
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url;
+        }
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const path = url.startsWith("/") ? url.slice(1) : url;
+        return `${baseUrl}/${path}`;
+    };
+
+    const isMediaUrl = content.startsWith("http") || content.startsWith("/uploads") || content.startsWith("uploads/");
+    const resolvedUrl = isMediaUrl ? getFileUrl(content) : "";
+    const filename = ai_metadata?.filename || (isMediaUrl ? content.split("/").pop() : "document");
+
+    const isVoiceMsg = isVoice || message_type === "voice" || content === "🎤 Voice message";
+    const voiceAudioUrl = audioUrl || ai_metadata?.audio_url || (isMediaUrl ? resolvedUrl : "");
 
     // Sentiment config
     const sentimentConfig: Record<string, { emoji: string; label: string; border: string; glow: string; text: string }> = {
@@ -107,7 +132,77 @@ export default function MessageBubble({
                     )}
 
                     {/* Content */}
-                    <div className="whitespace-pre-wrap">{content}</div>
+                    <div className="whitespace-pre-wrap">
+                        {isVoiceMsg && voiceAudioUrl ? (
+                            <div className="flex items-center gap-2 min-w-[180px]">
+                                <audio
+                                    controls
+                                    src={voiceAudioUrl}
+                                    className="h-8 w-full"
+                                    style={{ filter: "invert(1) hue-rotate(180deg)" }}
+                                    preload="metadata"
+                                />
+                            </div>
+                        ) : message_type === "image" && isMediaUrl ? (
+                            <a href={resolvedUrl} target="_blank" rel="noopener noreferrer">
+                                <img
+                                    src={resolvedUrl}
+                                    alt="Shared image"
+                                    className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                    style={{ maxHeight: 280, objectFit: "cover" }}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = "none";
+                                        (e.target as HTMLImageElement).insertAdjacentHTML(
+                                            "afterend",
+                                            `<span style="opacity:0.6">🖼️ Image could not be loaded</span>`
+                                        );
+                                    }}
+                                />
+                            </a>
+                        ) : message_type === "video" && isMediaUrl ? (
+                            <video
+                                controls
+                                className="max-w-full rounded-lg"
+                                style={{ maxHeight: 280 }}
+                                preload="metadata"
+                            >
+                                <source src={resolvedUrl} />
+                                Your browser does not support the video tag.
+                            </video>
+                        ) : message_type === "audio" && isMediaUrl ? (
+                            <audio controls className="w-full min-w-[200px]" preload="metadata">
+                                <source src={resolvedUrl} />
+                                Your browser does not support the audio tag.
+                            </audio>
+                        ) : message_type === "file" ? (
+                            <div className="flex items-center gap-2.5 py-1">
+                                <div
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                                    style={{
+                                        background: isCustomer
+                                            ? "var(--surface-wash)"
+                                            : "rgba(255,255,255,0.15)",
+                                    }}
+                                >
+                                    <Paperclip size={14} />
+                                </div>
+                                <span className="text-[13px] font-medium break-all">{filename}</span>
+                                {isMediaUrl && (
+                                    <a
+                                        href={resolvedUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-auto opacity-60 hover:opacity-100 transition-opacity"
+                                        download={filename}
+                                    >
+                                        <Download size={14} />
+                                    </a>
+                                )}
+                            </div>
+                        ) : (
+                            content
+                        )}
+                    </div>
 
                     {/* Inline Suggested Draft Reply */}
                     {isCustomer && ai_draft && (

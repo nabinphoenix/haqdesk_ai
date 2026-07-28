@@ -1,6 +1,6 @@
 """Team management router: invite sending (admin-only) and public invite acceptance."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -13,8 +13,9 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 from app.models.invitation import Invitation
 from app.models.business import Business
-from app.auth.utils import hash_password
+from app.auth.utils import hash_password, pwd_context
 from app.routers.auth import get_current_user, create_access_token
+from jose import JWTError, jwt
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -250,94 +251,129 @@ async def send_invite(
     }
 
 
+def get_current_business_admin(token: str, db: Session) -> User:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token expired or invalid")
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+        
+    if user.role not in (UserRole.BUSINESS_ADMIN, UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=403, detail="Only admins can perform this action")
+        
+    return user
+
+
+from app.services.email_service import send_invite_email
+from pydantic import BaseModel, EmailStr
+
+
+class InviteRequest(BaseModel):
+    token: str
+    email: EmailStr
+    role: str = "agent"
+
+
+@router.post("/invite-link")
+def generate_invite_link(
+    payload: InviteRequest,
+    db: Session = Depends(get_db)
+):
+    admin = get_current_business_admin(payload.token, db)
+
+    existing = db.query(User).filter(User.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="This email is already registered")
+
+    from app.models.business import Business
+    business = db.query(Business).filter(Business.id == admin.business_id).first()
+    business_name = business.name if business else "HaqDesk AI"
+
+    import time
+    invite_payload = {
+        "business_id": admin.business_id,
+        "role": payload.role,
+        "email": payload.email,
+        "type": "invite",
+        "exp": int(time.time()) + (7 * 24 * 60 * 60)
+    }
+    invite_token = jwt.encode(invite_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invite_token}"
+
+    email_sent = send_invite_email(
+        to_email=payload.email,
+        invite_url=invite_url,
+        business_name=business_name,
+        role=payload.role,
+        inviter_name=admin.name
+    )
+
+    return {
+        "invite_url": invite_url,
+        "expires_in": "7 days",
+        "role": payload.role,
+        "email_sent": email_sent,
+        "sent_to": payload.email
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC: Accept an invitation  (NO auth required)
 # POST /api/v1/team/accept-invite
 # ──────────────────────────────────────────────────────────────────────────────
 @router.post("/accept-invite")
-async def accept_invite(request: Request, db: Session = Depends(get_db)):
-    """
-    Public endpoint -- no JWT required.
-    Body: { token, name, email, password }
-    Creates the user account and links them to the correct business.
-    """
-    payload = await request.json()
-    token = payload.get("token", "").strip()
-    name = payload.get("name", "").strip()
-    email = payload.get("email", "").strip().lower()
-    password = payload.get("password", "").strip()
+async def accept_invite(
+    invite_token: str = Body(...),
+    name: str = Body(...),
+    email: str = Body(...),
+    password: str = Body(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(invite_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "invite":
+            raise HTTPException(status_code=400, detail="Invalid invite token")
+        business_id = payload.get("business_id")
+        role = payload.get("role", "agent")
+        invited_email = payload.get("email")
 
-    if not all([token, name, email, password]):
-        raise HTTPException(status_code=400, detail="token, name, email, and password are required")
+        if invited_email and email.lower() != invited_email.lower():
+            raise HTTPException(
+                status_code=400,
+                detail=f"This invite was sent to {invited_email}. Please use that email to accept."
+            )
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invite link expired or invalid")
 
-    # Find the invitation
-    invitation = db.query(Invitation).filter(Invitation.token == token).first()
-    if not invitation:
-        raise HTTPException(status_code=404, detail="Invalid invitation token")
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-    if invitation.accepted:
-        raise HTTPException(status_code=400, detail="This invitation has already been used")
-
-    # Handle timezone-aware/naive comparisons safely
-    now = datetime.now(timezone.utc) if invitation.expires_at.tzinfo is not None else datetime.utcnow()
-    if invitation.expires_at < now:
-        raise HTTPException(status_code=400, detail="This invitation has expired")
-
-    # Verify the email matches the invitation
-    if invitation.email != email:
-        raise HTTPException(status_code=400, detail="Email does not match the invitation")
-
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="A user with this email already exists")
-
-    # Verify the business exists
-    business = db.query(Business).filter(Business.id == invitation.business_id).first()
-    if not business:
-        raise HTTPException(status_code=400, detail="The associated business no longer exists")
-
-    # Map the role
-    user_role = ROLE_MAP.get(invitation.role, UserRole.AGENT)
-    if isinstance(user_role, str):
-        user_role = UserRole(user_role)
-
-    # Create the user
-    hashed_password = hash_password(password)
+    hashed_password = pwd_context.hash(password)
     new_user = User(
         name=name,
         email=email,
         hashed_password=hashed_password,
-        role=user_role.value if isinstance(user_role, UserRole) else user_role,
+        role=role,
+        business_id=business_id,
         provider="local",
         email_verified=True,
-        business_id=invitation.business_id,
+        status="offline",
     )
     db.add(new_user)
-
-    # Mark invitation as accepted
-    invitation.accepted = True
-
     db.commit()
     db.refresh(new_user)
 
-    # Generate JWT so the new user is logged in immediately
-    access_token = create_access_token(
-        data={"sub": new_user.email, "role": new_user.role, "name": new_user.name}
-    )
-
-    logger.info(f"Invitation accepted: {email} joined business {business.name} as {user_role}")
-
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": new_user.id,
-            "name": new_user.name,
-            "email": new_user.email,
-            "role": new_user.role,
-            "business_id": new_user.business_id,
-        },
+        "message": "Account created successfully. You can now login.",
+        "email": new_user.email,
+        "role": new_user.role
     }
 
 
@@ -347,27 +383,46 @@ async def accept_invite(request: Request, db: Session = Depends(get_db)):
 # ──────────────────────────────────────────────────────────────────────────────
 @router.get("/validate-invite")
 async def validate_invite(token: str, db: Session = Depends(get_db)):
-    """Check if an invite token is valid and return invite details."""
+    """Check if an invite token is valid and return invite details.
+    Supports both:
+    - Legacy UUID tokens (stored in the Invitation table)
+    - JWT tokens (stateless, from the /invite-link endpoint)
+    """
+    # ── 1. Try UUID-based Invitation DB lookup first ──
     invitation = db.query(Invitation).filter(Invitation.token == token).first()
-    if not invitation:
-        raise HTTPException(status_code=404, detail="Invalid invitation token")
+    if invitation:
+        if invitation.accepted:
+            raise HTTPException(status_code=400, detail="This invitation has already been used")
 
-    if invitation.accepted:
-        raise HTTPException(status_code=400, detail="This invitation has already been used")
+        now = datetime.now(timezone.utc) if invitation.expires_at.tzinfo is not None else datetime.utcnow()
+        if invitation.expires_at < now:
+            raise HTTPException(status_code=400, detail="This invitation has expired")
 
-    # Handle timezone-aware/naive comparisons safely
-    now = datetime.now(timezone.utc) if invitation.expires_at.tzinfo is not None else datetime.utcnow()
-    if invitation.expires_at < now:
-        raise HTTPException(status_code=400, detail="This invitation has expired")
+        business = db.query(Business).filter(Business.id == invitation.business_id).first()
+        return {
+            "email": invitation.email,
+            "role": invitation.role,
+            "business_name": business.name if business else "Unknown",
+            "expires_at": invitation.expires_at.isoformat(),
+        }
 
-    business = db.query(Business).filter(Business.id == invitation.business_id).first()
+    # ── 2. Fall back to JWT decode (new /invite-link flow) ──
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "invite":
+            raise HTTPException(status_code=400, detail="Invalid invitation token")
 
-    return {
-        "email": invitation.email,
-        "role": invitation.role,
-        "business_name": business.name if business else "Unknown",
-        "expires_at": invitation.expires_at.isoformat(),
-    }
+        business_id = payload.get("business_id")
+        business = db.query(Business).filter(Business.id == business_id).first()
+
+        return {
+            "email": payload.get("email", ""),
+            "role": payload.get("role", "agent"),
+            "business_name": business.name if business else "Unknown",
+            "expires_at": "",
+        }
+    except JWTError:
+        raise HTTPException(status_code=404, detail="Invalid or expired invitation token")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -133,6 +133,23 @@ def migrate():
                 if "already exists" in str(e).lower():
                     print(f"  [SKIP] Column '{col_name}' already exists. Skipping.")
                 else:
+                    print(f"  [ERROR] Error adding '{col_name}': {e}")        # ---- conversations table ----
+        conversation_columns = [
+            ("last_read_at", "TIMESTAMP WITH TIME ZONE"),
+            ("is_deleted", "BOOLEAN DEFAULT FALSE"),
+            ("deleted_at", "TIMESTAMP WITH TIME ZONE"),
+        ]
+        for col_name, col_type in conversation_columns:
+            try:
+                print(f"Adding column {col_name} to conversations...")
+                conn.execute(text(f"ALTER TABLE conversations ADD COLUMN {col_name} {col_type}"))
+                conn.commit()
+                print(f"Column '{col_name}' added.")
+            except Exception as e:
+                conn.rollback()
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    print(f"  [SKIP] Column '{col_name}' already exists. Skipping.")
+                else:
                     print(f"  [ERROR] Error adding '{col_name}': {e}")
 
     # Step 2: Create all new tables (knowledge_documents, knowledge_chunks, etc.)

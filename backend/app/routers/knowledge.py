@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
 from app.core.dependencies import get_current_user
-from app.models.knowledge import KnowledgeDocument
+from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.user import User
 from app.services.rag_service import rag_service
 
@@ -200,12 +200,71 @@ async def query_knowledge(
         db=db
     )
 
-    if not result:
-        return {
-            "answer": "No relevant knowledge found in the database for this question.",
-            "confidence": 0.0,
-            "sources": [],
-            "chunks_used": 0
-        }
-
     return result
+
+
+class ChunkUpdateRequest(BaseModel):
+    content: str
+
+
+@router.get("/documents/{document_id}/chunks")
+def get_document_chunks(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
+
+    doc = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.id == document_id,
+        KnowledgeDocument.business_id == business_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunks = db.query(KnowledgeChunk).filter(
+        KnowledgeChunk.document_id == document_id
+    ).order_by(KnowledgeChunk.page_number, KnowledgeChunk.id).all()
+
+    return [
+        {
+            "id": c.id,
+            "content": c.content,
+            "page_number": c.page_number,
+        }
+        for c in chunks
+    ]
+
+
+@router.patch("/chunks/{chunk_id}")
+def update_chunk(
+    chunk_id: int,
+    payload: ChunkUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    business_id = current_user.business_id
+    if not business_id:
+        raise HTTPException(status_code=403, detail="No business associated with this account")
+
+    chunk = db.query(KnowledgeChunk).filter(
+        KnowledgeChunk.id == chunk_id,
+        KnowledgeChunk.business_id == business_id
+    ).first()
+
+    if not chunk:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+
+    try:
+        rag_service.update_chunk_embedding(chunk_id, payload.content, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update chunk: {e}")
+
+    return {
+        "id": chunk_id,
+        "content": payload.content,
+        "message": "Chunk updated and re-indexed in Qdrant"
+    }
+

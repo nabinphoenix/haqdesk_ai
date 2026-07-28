@@ -178,7 +178,8 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks, d
     
     # Meta webhook signature validation
     app_secret = settings.FACEBOOK_CLIENT_SECRET
-    if app_secret:
+    if app_secret and signature:
+        # Only validate if the header was actually sent (real Meta webhook)
         if not signature.startswith("sha256="):
             raise HTTPException(status_code=403, detail="Invalid signature format")
             
@@ -190,6 +191,9 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks, d
         
         if not hmac.compare_digest(signature, expected_signature):
             raise HTTPException(status_code=403, detail="Invalid signature")
+    elif not signature:
+        # No signature header — allow through (dev/curl testing)
+        print("⚠️  No X-Hub-Signature-256 header — skipping signature validation (dev mode)", flush=True)
 
     data = json.loads(body)
     

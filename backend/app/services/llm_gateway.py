@@ -154,5 +154,27 @@ class LLMGateway:
                     
         raise LLMGatewayError("No LLM models were executed successfully.")
 
+    async def complete(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 500,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        result = await self.generate(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            metadata=metadata
+        )
+        return {
+            "content": result.content,
+            "model": result.model,
+            "provider": result.provider,
+            "fallback_used": result.fallback_used,
+            "attempts": result.attempts,
+            "latency_ms": result.latency_ms,
+        }
+
 # Singleton instance
 llm_gateway = LLMGateway()

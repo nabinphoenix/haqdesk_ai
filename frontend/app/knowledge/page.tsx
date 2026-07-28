@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { fetchWithAuth } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import { toast } from "sonner";
 import {
   FileText, Search, Upload, Database, Plus,
   CheckCircle2, Trash2, X, Bot, AlertCircle,
-  BookOpen, ChevronRight, Zap, Eye,
+  BookOpen, ChevronRight, Zap, Eye, Edit3, Save
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -40,6 +42,51 @@ export default function KnowledgeBase() {
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDeleteDocId, setConfirmDeleteDocId] = useState<number | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+
+  const [editingDoc, setEditingDoc] = useState<KnowledgeDoc | null>(null);
+  const [editingChunks, setEditingChunks] = useState<any[]>([]);
+  const [loadingChunks, setLoadingChunks] = useState(false);
+  const [savingChunk, setSavingChunk] = useState<number | null>(null);
+
+  const loadDocumentChunks = async (docId: number) => {
+    setLoadingChunks(true);
+    try {
+      const res = await fetchWithAuth(`/api/v1/knowledge/documents/${docId}/chunks`);
+      if (res.ok) {
+        const data = await res.json();
+        setEditingChunks(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingChunks(false);
+    }
+  };
+
+  const saveChunk = async (chunkId: number, newContent: string) => {
+    setSavingChunk(chunkId);
+    try {
+      const res = await fetchWithAuth(`/api/v1/knowledge/chunks/${chunkId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newContent }),
+      });
+      if (res.ok) {
+        setEditingChunks((prev) =>
+          prev.map((c) => (c.id === chunkId ? { ...c, content: newContent } : c))
+        );
+        toast.success("Chunk saved and re-indexed");
+      } else {
+        toast.error("Failed to save chunk");
+      }
+    } catch (e) {
+      toast.error("Network error");
+    } finally {
+      setSavingChunk(null);
+    }
+  };
 
   const fetchDocuments = async () => {
     try {
@@ -113,16 +160,29 @@ export default function KnowledgeBase() {
     if (e.dataTransfer.files?.[0]) uploadFile(e.dataTransfer.files[0]);
   };
 
-  const handleDelete = async (id: number, e: React.MouseEvent) => {
+  const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Delete this document and all its indexed data?")) return;
+    setConfirmDeleteDocId(id);
+  };
+
+  const executeDeleteDoc = async () => {
+    if (confirmDeleteDocId === null) return;
+    setIsDeletingDoc(true);
     try {
-      const response = await fetchWithAuth(`/api/v1/knowledge/documents/${id}`, { method: "DELETE" });
+      const response = await fetchWithAuth(`/api/v1/knowledge/documents/${confirmDeleteDocId}`, { method: "DELETE" });
       if (response.ok) {
-        setDocuments(prev => prev.filter(doc => doc.id !== id));
-        if (selectedDoc?.id === id) setSelectedDoc(null);
+        setDocuments(prev => prev.filter(doc => doc.id !== confirmDeleteDocId));
+        if (selectedDoc?.id === confirmDeleteDocId) setSelectedDoc(null);
+        toast.success("Document deleted successfully");
+      } else {
+        toast.error("Failed to delete document.");
       }
-    } catch { alert("Error deleting document."); }
+    } catch {
+      toast.error("Error deleting document. Please try again.");
+    } finally {
+      setIsDeletingDoc(false);
+      setConfirmDeleteDocId(null);
+    }
   };
 
   const handleQuerySubmit = async (e: React.FormEvent) => {
@@ -157,6 +217,17 @@ export default function KnowledgeBase() {
   return (
     <div className="page-padded font-body">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".pdf,.docx,.txt" className="hidden" />
+
+      <ConfirmModal
+        isOpen={confirmDeleteDocId !== null}
+        title="Delete Document"
+        message="This document and all its indexed knowledge data will be permanently deleted. This cannot be undone."
+        confirmLabel={isDeletingDoc ? "Deleting…" : "Delete Document"}
+        cancelLabel="Cancel"
+        onConfirm={executeDeleteDoc}
+        onCancel={() => setConfirmDeleteDocId(null)}
+        isDangerous={true}
+      />
 
       <div className="page-shell">
         {/* Header */}
@@ -378,6 +449,13 @@ export default function KnowledgeBase() {
                       Test with AI
                     </button>
                     <button
+                      onClick={() => { setEditingDoc(selectedDoc); loadDocumentChunks(selectedDoc.id); }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[11px] font-black uppercase tracking-wider transition-all"
+                    >
+                      <Edit3 size={13} />
+                      Edit Content
+                    </button>
+                    <button
                       onClick={(e) => handleDelete(selectedDoc.id, e)}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-wider transition-all"
                     >
@@ -445,6 +523,95 @@ export default function KnowledgeBase() {
 
         </div>
       </div>
+
+      {/* Chunk Editor Modal */}
+      <AnimatePresence>
+        {editingDoc && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-white/10 bg-[#130E22] shadow-2xl flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+                <div>
+                  <h2 className="text-base font-black text-white">Edit Document Content</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{editingDoc.filename} — {editingChunks.length} chunks</p>
+                </div>
+                <button
+                  onClick={() => { setEditingDoc(null); setEditingChunks([]); }}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Chunk list */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                {loadingChunks ? (
+                  <div className="flex justify-center py-12">
+                    <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : editingChunks.length === 0 ? (
+                  <p className="text-xs text-center text-slate-500 py-8">No chunks found in this document.</p>
+                ) : (
+                  editingChunks.map((chunk, idx) => (
+                    <ChunkEditor
+                      key={chunk.id}
+                      chunk={chunk}
+                      index={idx}
+                      saving={savingChunk === chunk.id}
+                      onSave={(newContent) => saveChunk(chunk.id, newContent)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ChunkEditor({ chunk, index, saving, onSave }: {
+  chunk: any;
+  index: number;
+  saving: boolean;
+  onSave: (content: string) => void;
+}) {
+  const [content, setContent] = useState(chunk.content);
+  const [isDirty, setIsDirty] = useState(false);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+          Chunk {index + 1} · Page {chunk.page_number || "?"}
+        </span>
+        {isDirty && (
+          <button
+            onClick={() => { onSave(content); setIsDirty(false); }}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
+          >
+            {saving ? (
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Save size={11} />
+            )}
+            {saving ? "Saving..." : "Save & Re-index"}
+          </button>
+        )}
+      </div>
+      <textarea
+        value={content}
+        onChange={(e) => { setContent(e.target.value); setIsDirty(e.target.value !== chunk.content); }}
+        rows={4}
+        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-gray-200 focus:border-purple-500 focus:outline-none resize-y transition-all"
+      />
+      {isDirty && (
+        <p className="text-[10px] text-yellow-400 mt-1">
+          ⚠ Unsaved changes — save to re-index this chunk in the RAG system
+        </p>
+      )}
     </div>
   );
 }

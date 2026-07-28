@@ -6,7 +6,6 @@ python-multipart
 # Database
 sqlalchemy
 psycopg2-binary
-pgvector
 alembic
 
 # Authentication
@@ -25,10 +24,12 @@ langchain-groq
 langchain-text-splitters
 sentence-transformers
 groq
+litellm
 pypdf
 python-docx
 pymupdf
 langdetect
+qdrant-client
 
 # Hugging Face / BERT
 transformers

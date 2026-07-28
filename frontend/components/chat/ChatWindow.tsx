@@ -15,9 +15,26 @@ import {
     PanelRightClose,
     X,
     CheckCheck,
+    Mic,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const formatMessageDate = (date: Date): string => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const isSameDay = (d1: Date, d2: Date) =>
+        d1.getDate() === d2.getDate() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getFullYear() === d2.getFullYear();
+
+    if (isSameDay(date, today)) return "Today";
+    if (isSameDay(date, yesterday)) return "Yesterday";
+    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Message {
@@ -25,10 +42,15 @@ interface Message {
     content: string;
     sender: "customer" | "agent" | "ai";
     sender_name?: string | null;
+    message_type?: string;
     timestamp: string;
+    rawDate: Date;
     ai_draft?: string | null;
     ai_language?: string | null;
     sentiment?: string | null;
+    ai_metadata?: any;
+    isVoice?: boolean;
+    audioUrl?: string;
 }
 
 interface ChatWindowProps {
@@ -36,6 +58,7 @@ interface ChatWindowProps {
     customerName?: string;
     platform?: string;
     customerId?: string;
+    aiMode?: "auto" | "review";
     onBack?: () => void;
     showCustomerPanel?: boolean;
     onToggleCustomerPanel?: () => void;
@@ -83,6 +106,7 @@ export default function ChatWindow({
     customerName,
     platform,
     customerId,
+    aiMode = "review",
     onBack,
     showCustomerPanel,
     onToggleCustomerPanel,
@@ -91,10 +115,23 @@ export default function ChatWindow({
     const [input, setInput] = useState("");
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [sending, setSending] = useState(false);
+    const [emailSubject, setEmailSubject] = useState("Re: Support from TechSuru");
+    const [conversationPlatform, setConversationPlatform] = useState<string>(platform || "");
+    const [conversationStatus, setConversationStatus] = useState<string>("open");
+    const [conversationPriority, setConversationPriority] = useState<string>("medium");
+    const [uploadingFile, setUploadingFile] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const [attachedFile, setAttachedFile] = useState<File | null>(null);
 
     const scrollRef   = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const emojiRef    = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<any | null>(null);
 
     // AI suggestion state
     const [aiSuggestion, setAiSuggestion] = useState<Message | null>(null);
@@ -113,23 +150,38 @@ export default function ChatWindow({
             );
             if (!res.ok) return;
             const data = await res.json();
-            const formatted: Message[] = data.map((m: any) => ({
-                id: m.id,
-                content: m.content,
-                sender: m.sender_type,
-                sender_name: m.sender_name || null,
-                timestamp: new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                ai_draft: m.ai_draft || null,
-                ai_language: m.ai_language || null,
-                sentiment: m.sentiment || null,
-            }));
+            const formatted: Message[] = data.map((m: any) => {
+                const dateObj = new Date(m.timestamp);
+                return {
+                    id: m.id,
+                    content: m.content,
+                    sender: m.sender_type,
+                    sender_name: m.sender_name || null,
+                    message_type: m.message_type || "text",
+                    timestamp: dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    rawDate: dateObj,
+                    ai_draft: m.ai_draft || null,
+                    ai_language: m.ai_language || null,
+                    sentiment: m.sentiment || null,
+                    ai_metadata: m.ai_metadata || null,
+                    isVoice: m.message_type === "voice",
+                    audioUrl: m.ai_metadata?.audio_url || (m.message_type === "voice" ? m.content : undefined),
+                };
+            });
             setMessages(prev => {
-                if (prev.length === formatted.length) {
-                    const last = formatted.length - 1;
-                    if (last < 0) return prev;
-                    if (prev[last]?.id === formatted[last].id && prev[last]?.content === formatted[last].content) return prev;
+                const optimisticMessages = prev.filter(p =>
+                    p.id > 1700000000000 &&
+                    !formatted.some(f => f.content === p.content && f.sender === p.sender)
+                );
+                const merged = [...formatted, ...optimisticMessages];
+                
+                if (prev.length === merged.length) {
+                    const hasDifference = prev.some((m, idx) => 
+                        m.id !== merged[idx].id || m.content !== merged[idx].content
+                    );
+                    if (!hasDifference) return prev;
                 }
-                return formatted;
+                return merged;
             });
         } catch (e) { console.error(e); }
     };
@@ -146,8 +198,12 @@ export default function ChatWindow({
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, [messages]);
 
-    // AI suggestion logic
+    // AI suggestion logic (only active in Review Mode)
     useEffect(() => {
+        if (aiMode === "auto") {
+            setAiSuggestion(null);
+            return;
+        }
         const aiMsgs = messages.filter(m => m.sender === "ai");
         if (aiMsgs.length === 0) { setAiSuggestion(null); return; }
         const lastAi = aiMsgs[aiMsgs.length - 1];
@@ -162,7 +218,7 @@ export default function ChatWindow({
         } else {
             setAiSuggestion(null);
         }
-    }, [messages]);
+    }, [messages, aiMode]);
 
     // Reset on conversation change
     useEffect(() => {
@@ -171,7 +227,56 @@ export default function ChatWindow({
         prevSuggestionId.current = null;
         setInput("");
         setMessages([]);
+        setConversationPlatform(platform?.toLowerCase() || "");
+        setEmailSubject("Re: Support from TechSuru");
     }, [conversationId]);
+
+    useEffect(() => {
+        if (!conversationId) return;
+        const fetchConvDetails = async () => {
+            try {
+                const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setConversationStatus(data.status || "open");
+                    setConversationPriority(data.priority || "medium");
+                }
+            } catch (e) { console.error(e); }
+        };
+        fetchConvDetails();
+    }, [conversationId]);
+
+    const handleUpdateStatus = async (status: string) => {
+        try {
+            const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status }),
+            });
+            if (res.ok) {
+                setConversationStatus(status);
+                toast.success(`Marked as ${status}`);
+                // Dispatch event to trigger refresh in parent conversation list
+                window.dispatchEvent(new Event("customerLinked"));
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    const handleUpdatePriority = async (priority: string) => {
+        try {
+            const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ priority }),
+            });
+            if (res.ok) {
+                setConversationPriority(priority);
+                toast.success(`Priority set to ${priority}`);
+                // Dispatch event to trigger refresh in parent conversation list
+                window.dispatchEvent(new Event("customerLinked"));
+            }
+        } catch (e) { console.error(e); }
+    };
 
     // Close emoji on outside click
     useEffect(() => {
@@ -184,52 +289,294 @@ export default function ChatWindow({
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
+    // Cleanup recording timer on unmount
+    useEffect(() => {
+        return () => {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+            }
+        };
+    }, []);
+
+    // ── Voice Recording Handlers ───────────────────────────────────────────
+    const startRecording = async () => {
+        try {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+            setRecordingDuration(0);
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    audioChunksRef.current.push(e.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+                stream.getTracks().forEach(track => track.stop());
+                await sendVoiceMessage(audioBlob);
+            };
+
+            mediaRecorder.start(100);
+            setIsRecording(true);
+
+            // Timer to show recording duration
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingDuration(prev => {
+                    if (prev >= 120) {
+                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+                            mediaRecorderRef.current.stop();
+                        }
+                        setIsRecording(false);
+                        if (recordingTimerRef.current) {
+                            clearInterval(recordingTimerRef.current);
+                            recordingTimerRef.current = null;
+                        }
+                        return 0;
+                    }
+                    return prev + 1;
+                });
+            }, 1000);
+
+        } catch (err) {
+            toast.error("Microphone access denied. Please allow microphone access.");
+            console.error("Recording error:", err);
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+            mediaRecorderRef.current.stop();
+        }
+        setIsRecording(false);
+        setRecordingDuration(0);
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+    };
+
+    const cancelRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.ondataavailable = null;
+            mediaRecorderRef.current.onstop = null;
+            if (mediaRecorderRef.current.state === "recording") {
+                mediaRecorderRef.current.stop();
+            }
+            if (mediaRecorderRef.current.stream) {
+                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+            }
+        }
+        setIsRecording(false);
+        setRecordingDuration(0);
+        audioChunksRef.current = [];
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+    };
+
+    const sendVoiceMessage = async (audioBlob: Blob) => {
+        if (!conversationId) return;
+        setUploadingFile(true);
+
+        try {
+            const formData = new FormData();
+            const filename = `voice_message_${Date.now()}.webm`;
+            formData.append("file", audioBlob, filename);
+            formData.append("conversation_id", conversationId.toString());
+            formData.append("message_type", "voice");
+
+            const token = localStorage.getItem("token");
+            const res = await fetch(
+                `${API_URL}/api/v1/inbox/conversations/${conversationId}/attachment`,
+                {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData,
+                }
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                const now = new Date();
+                setMessages(prev => [...prev, {
+                    id: data.message_id || Date.now(),
+                    content: `🎤 Voice message`,
+                    sender: "agent",
+                    sender_name: localStorage.getItem("userName") || "Agent",
+                    timestamp: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    rawDate: now,
+                    isVoice: true,
+                    audioUrl: data.audio_url,
+                }]);
+                toast.success("Voice message sent");
+            } else {
+                toast.error("Failed to send voice message");
+            }
+        } catch (e) {
+            toast.error("Network error sending voice message");
+        } finally {
+            setUploadingFile(false);
+        }
+    };
+
     // ── Send message ───────────────────────────────────────────────────────
     const handleSend = async () => {
-        if (!input.trim() || !conversationId || sending) return;
+        if ((!input.trim() && !attachedFile) || !conversationId || sending) return;
         const token = localStorage.getItem("token");
         if (!token) { alert("Session expired. Please login."); return; }
 
         const text = input.trim();
+        const fileToSend = attachedFile;
+
         setInput("");
+        setAttachedFile(null);
         setSending(true);
 
-        // Optimistic
+        const tempId = Date.now();
         const currentUserName = localStorage.getItem("userName") || "Agent";
-        setMessages(prev => [...prev, {
-            id: Date.now(),
-            content: text,
-            sender: "agent",
-            sender_name: currentUserName,
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        }]);
+        const now = new Date();
 
-        try {
-            let res: Response;
-            if (platform?.toLowerCase() === "whatsapp") {
-                res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: text }),
-                });
-            } else {
-                res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: text }),
-                });
+        if (fileToSend) {
+            const formData = new FormData();
+            formData.append("file", fileToSend);
+            formData.append("conversation_id", conversationId.toString());
+            if (text) {
+                formData.append("message", text);
             }
-            if (res.ok) fetchMessages();
-            else console.error("Send failed:", await res.text().catch(() => res.statusText));
-        } catch (e) {
-            console.error("Network error sending message:", e);
-        } finally {
-            setSending(false);
+            if (conversationPlatform === "email") {
+                formData.append("subject", emailSubject);
+            }
+
+            // Optimistic rendering
+            setMessages(prev => {
+                const tempMsgs = [...prev];
+                tempMsgs.push({
+                    id: tempId,
+                    content: `/uploads/attachments/${fileToSend.name}`,
+                    message_type: fileToSend.type.startsWith("image/") ? "image" : fileToSend.type.startsWith("video/") ? "video" : "file",
+                    ai_metadata: { filename: fileToSend.name },
+                    sender: "agent",
+                    sender_name: currentUserName,
+                    timestamp: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    rawDate: now,
+                });
+                if (text) {
+                    tempMsgs.push({
+                        id: tempId + 1,
+                        content: text,
+                        sender: "agent",
+                        sender_name: currentUserName,
+                        timestamp: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        rawDate: now,
+                    });
+                }
+                return tempMsgs;
+            });
+
+            try {
+                const res = await fetch(`${API_URL}/api/v1/inbox/conversations/${conversationId}/attachment`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData,
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.delivered === false) {
+                        toast.error(`Delivery failed: ${data.error || "Platform error"}`);
+                        setMessages(prev => prev.filter(m => m.id !== tempId && m.id !== tempId + 1));
+                    } else {
+                        toast.success("Attachment sent successfully");
+                    }
+                    fetchMessages();
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData.detail || "Failed to send attachment";
+                    toast.error(errMsg);
+                    setMessages(prev => prev.filter(m => m.id !== tempId && m.id !== tempId + 1));
+                }
+            } catch (e) {
+                toast.error("Network error uploading attachment");
+                setMessages(prev => prev.filter(m => m.id !== tempId && m.id !== tempId + 1));
+            } finally {
+                setSending(false);
+            }
+        } else {
+            // Optimistic
+            setMessages(prev => [...prev, {
+                id: tempId,
+                content: text,
+                sender: "agent",
+                sender_name: currentUserName,
+                timestamp: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                rawDate: now,
+            }]);
+
+            try {
+                let res: Response;
+                res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content: text, subject: conversationPlatform === "email" ? emailSubject : undefined }),
+                });
+                if (res.ok) {
+                    const savedMessage = await res.json();
+                    setMessages(prev => prev.map(m =>
+                        m.id === tempId
+                            ? {
+                                id: savedMessage.id,
+                                content: savedMessage.content,
+                                sender: savedMessage.sender_type,
+                                sender_name: currentUserName,
+                                timestamp: new Date(savedMessage.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                rawDate: new Date(savedMessage.timestamp),
+                                ai_draft: null,
+                                ai_language: null,
+                                sentiment: null,
+                              }
+                            : m
+                    ));
+                    fetchMessages();
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData.detail || "Failed to send message";
+                    toast.error(errMsg);
+                    setMessages(prev => prev.filter(m => m.id !== tempId));
+                }
+            } catch (e) {
+                toast.error("Network error sending message");
+                setMessages(prev => prev.filter(m => m.id !== tempId));
+            } finally {
+                setSending(false);
+            }
         }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    };
+
+    const handleFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !conversationId) return;
+
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+            toast.error("File too large. Maximum size is 10MB.");
+            return;
+        }
+
+        setAttachedFile(file);
+        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     if (!conversationId) return null;
@@ -294,7 +641,35 @@ export default function ChatWindow({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                    {/* Status toggle */}
+                    <select
+                        value={conversationStatus || "open"}
+                        onChange={(e) => handleUpdateStatus(e.target.value)}
+                        className="text-[10px] font-bold px-2 py-1 rounded-lg bg-black/10 border border-[var(--border)] text-[var(--text-secondary)] focus:outline-none"
+                    >
+                        <option value="open" className="bg-[var(--surface)] text-[var(--text-primary)]">Open</option>
+                        <option value="resolved" className="bg-[var(--surface)] text-[var(--text-primary)]">Resolved</option>
+                        <option value="closed" className="bg-[var(--surface)] text-[var(--text-primary)]">Closed</option>
+                    </select>
+
+                    {/* Priority badge */}
+                    <select
+                        value={conversationPriority || "medium"}
+                        onChange={(e) => handleUpdatePriority(e.target.value)}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border focus:outline-none ${
+                            conversationPriority === "urgent" ? "bg-red-500/20 border-red-500/30 text-red-400" :
+                            conversationPriority === "high" ? "bg-orange-500/20 border-orange-500/30 text-orange-400" :
+                            conversationPriority === "low" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" :
+                            "bg-yellow-500/20 border-yellow-500/30 text-yellow-400"
+                        }`}
+                    >
+                        <option value="low" className="bg-[var(--surface)] text-[var(--text-primary)]">🟢 Low</option>
+                        <option value="medium" className="bg-[var(--surface)] text-[var(--text-primary)]">🟡 Medium</option>
+                        <option value="high" className="bg-[var(--surface)] text-[var(--text-primary)]">🟠 High</option>
+                        <option value="urgent" className="bg-[var(--surface)] text-[var(--text-primary)]">🔴 Urgent</option>
+                    </select>
+
                     {onToggleCustomerPanel && (
                         <button
                             onClick={onToggleCustomerPanel}
@@ -321,22 +696,34 @@ export default function ChatWindow({
                         <p className="text-[12px] text-[var(--text-secondary)]">No messages yet. Say hi! 👋</p>
                     </div>
                 ) : (
-                    messages.map(msg => {
+                    messages.map((msg, idx) => {
+                        const showDateSeparator = idx === 0 ||
+                            formatMessageDate(msg.rawDate) !== formatMessageDate(messages[idx - 1].rawDate);
+
                         const agentInitials = msg.sender === "agent" && msg.sender_name
                             ? msg.sender_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
                             : msg.sender === "ai"
                             ? "AI"
                             : localStorage.getItem("userName")?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "AG";
+
                         return (
-                            <MessageBubble
-                                key={msg.id}
-                                {...msg}
-                                agentInitials={agentInitials}
-                                onUseDraft={(draft) => {
-                                    setInput(draft);
-                                    setTimeout(() => textareaRef.current?.focus(), 50);
-                                }}
-                            />
+                            <div key={msg.id} className="space-y-3">
+                                {showDateSeparator && (
+                                    <div className="flex items-center justify-center my-4">
+                                        <span className="text-[11px] font-medium text-[var(--text-secondary)] bg-[var(--surface-wash)] px-3 py-1 rounded-full border border-[var(--border)]">
+                                            {formatMessageDate(msg.rawDate)}
+                                        </span>
+                                    </div>
+                                )}
+                                <MessageBubble
+                                    {...msg}
+                                    agentInitials={agentInitials}
+                                    onUseDraft={(draft) => {
+                                        setInput(draft);
+                                        setTimeout(() => textareaRef.current?.focus(), 50);
+                                    }}
+                                />
+                            </div>
                         );
                     })
                 )}
@@ -397,55 +784,163 @@ export default function ChatWindow({
                     )}
                 </AnimatePresence>
 
-                <div className="flex flex-col gap-2.5">
-                    {/* Textarea */}
-                    <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        rows={3}
-                        placeholder={`Message ${customerName || "customer"}…`}
-                        className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none leading-relaxed transition-all custom-scrollbar"
-                        style={{
-                            background: "var(--surface-wash)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text-primary)",
-                            minHeight: 80,
-                        }}
-                    />
-
-                    {/* Toolbar */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setShowEmojiPicker(v => !v)}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${showEmojiPicker ? "bg-[#6D4AE2] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5"}`}
-                            >
-                                <Smile size={15} />
-                            </button>
-                            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all">
-                                <Paperclip size={15} />
-                            </button>
-                            <span className="text-[10px] text-[var(--text-secondary)] ml-1 hidden sm:inline">
-                                Enter to send · Shift+Enter for newline
-                            </span>
-                        </div>
-
-                        <button
-                            onClick={handleSend}
-                            disabled={!input.trim() || sending}
-                            className="flex items-center gap-2 px-5 py-2 rounded-xl text-white text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                            style={{ background: pColor, boxShadow: `0 4px 15px ${pColor}40` }}
+                {/* File preview */}
+                {attachedFile && (
+                    <div 
+                        className="flex items-center gap-3 border rounded-xl px-4 py-2.5 mb-2.5"
+                        style={{ background: "var(--surface-wash)", borderColor: "var(--border)" }}
+                    >
+                        <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: "rgba(109, 74, 226, 0.15)", color: "#8B5CF6" }}
                         >
-                            {sending ? (
-                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <Send size={13} strokeWidth={2.5} />
-                            )}
-                            Send
+                            <Paperclip size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium text-[var(--text-primary)] truncate">{attachedFile.name}</p>
+                            <p className="text-[10px] text-[var(--text-secondary)]">
+                                {(attachedFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setAttachedFile(null)}
+                            className="p-1.5 text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Remove attachment"
+                        >
+                            <X size={14} />
                         </button>
                     </div>
+                )}
+
+                <div className="flex flex-col gap-2.5">
+                    {/* Show subject line only for email conversations */}
+                    {conversationPlatform === "email" && !isRecording && (
+                        <input
+                            type="text"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            placeholder="Subject..."
+                            className="w-full px-4 py-2 rounded-xl text-[12px] outline-none transition-all"
+                            style={{
+                                background: "var(--surface-wash)",
+                                border: "1px solid var(--border)",
+                                color: "var(--text-primary)",
+                            }}
+                        />
+                    )}
+
+                    {isRecording ? (
+                        /* Recording mode UI */
+                        <div className="flex items-center gap-3 py-2">
+                            {/* Animated recording indicator */}
+                            <div className="flex items-center gap-2 flex-1 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">
+                                <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shrink-0" />
+                                <span className="text-red-400 text-[13px] font-medium">Recording...</span>
+                                <span className="text-red-400/60 text-[12px] ml-auto">
+                                    {Math.floor(recordingDuration / 60).toString().padStart(2, "0")}:
+                                    {(recordingDuration % 60).toString().padStart(2, "0")}
+                                </span>
+                            </div>
+
+                            {/* Cancel recording */}
+                            <button
+                                onClick={cancelRecording}
+                                className="p-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all"
+                                title="Cancel recording"
+                            >
+                                <X size={18} />
+                            </button>
+
+                            {/* Stop and send */}
+                            <button
+                                onClick={stopRecording}
+                                className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all flex items-center gap-1.5"
+                                title="Stop and send"
+                            >
+                                <Send size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        /* Normal message input UI */
+                        <>
+                            {/* Textarea */}
+                            <textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                rows={3}
+                                placeholder={`Message ${customerName || "customer"}…`}
+                                className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none leading-relaxed transition-all custom-scrollbar"
+                                style={{
+                                    background: "var(--surface-wash)",
+                                    border: "1px solid var(--border)",
+                                    color: "var(--text-primary)",
+                                    minHeight: 80,
+                                }}
+                            />
+
+                            {/* Toolbar */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setShowEmojiPicker(v => !v)}
+                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${showEmojiPicker ? "bg-[#6D4AE2] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5"}`}
+                                    >
+                                        <Smile size={15} />
+                                    </button>
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={uploadingFile}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+                                        title="Attach file"
+                                    >
+                                        {uploadingFile ? (
+                                            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                            <Paperclip size={15} />
+                                        )}
+                                    </button>
+
+                                    {/* Mic recording button - only show when input is empty and no file attached */}
+                                    {!input.trim() && !attachedFile && (
+                                        <button
+                                            onClick={startRecording}
+                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-purple-500 hover:bg-purple-500/10 transition-all shrink-0"
+                                            title="Record voice message"
+                                        >
+                                            <Mic size={15} />
+                                        </button>
+                                    )}
+
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        onChange={handleFileAttachment}
+                                        accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv,.mp3,.mp4,.webm,.ogg,.wav"
+                                    />
+                                    <span className="text-[10px] text-[var(--text-secondary)] ml-1 hidden sm:inline">
+                                        Enter to send · Shift+Enter for newline
+                                    </span>
+                                </div>
+
+                                <button
+                                    onClick={handleSend}
+                                    disabled={(!input.trim() && !attachedFile) || sending}
+                                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-white text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    style={{ background: pColor, boxShadow: `0 4px 15px ${pColor}40` }}
+                                >
+                                    {sending ? (
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <Send size={13} strokeWidth={2.5} />
+                                    )}
+                                    Send
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

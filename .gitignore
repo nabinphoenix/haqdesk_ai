@@ -71,3 +71,11 @@ yarn-error.log*
 .pnpm-debug.log*
 
 HaqDesk_AI_query.sql
+
+# Qdrant vector storage (binary data)
+backend/qdrant_storage/
+qdrant_storage/
+
+# Uploaded files
+backend/uploads/
+uploads/

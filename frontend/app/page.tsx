@@ -351,13 +351,13 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: "var(--accent)" }}
+              className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L13 5.5V10.5L8 14L3 10.5V5.5L8 2Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
-                <path d="M8 5.5L10.5 7V9L8 10.5L5.5 9V7L8 5.5Z" fill="white" />
-              </svg>
+              <img
+                src="/images/HaqDesk.png"
+                alt="HaqDesk AI"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="text-sm font-bold tracking-tight text-foreground font-heading">
               HaqDesk<span style={{ color: "var(--accent)" }}> AI</span>

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Save, Building2, Link2, Bell, Shield, CheckCircle2, Zap } from "lucide-react";
+import { toast } from "sonner";
+import { fetchWithAuth } from "@/lib/api";
 
 const tabs = [
   { id: "business", label: "Business Profile", icon: Building2 },
@@ -14,19 +16,106 @@ const tabs = [
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("business");
   const [saved, setSaved] = useState(false);
-  const [businessName, setBusinessName] = useState("");
-  const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState("");
-  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  
+  const [businessData, setBusinessData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    website: "",
+    description: "",
+    ai_response_mode: "review",
+  });
 
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState({
+    new_message: true,
+    urgent_sentiment: true,
+    ai_draft: false,
+    agent_assigned: true,
+  });
+
+  // Load business settings
   useEffect(() => {
-    setEmail(localStorage.getItem("userEmail") || "");
-    setBusinessName(localStorage.getItem("businessName") || "");
+    const fetchBusiness = async () => {
+      try {
+        const res = await fetchWithAuth("/api/v1/settings/business");
+        if (res.ok) {
+          const data = await res.json();
+          setBusinessData({
+            name: data.name || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            website: data.website || "",
+            description: data.description || "",
+            ai_response_mode: data.ai_response_mode || "review",
+          });
+        }
+      } catch (e) {
+        console.error("Failed to load business profile", e);
+      }
+    };
+    fetchBusiness();
   }, []);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Load notification preferences from localStorage
+  useEffect(() => {
+    const savedPrefs = localStorage.getItem("notificationPrefs");
+    if (savedPrefs) {
+      try {
+        setNotifications(JSON.parse(savedPrefs));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  // Fetch integrations when tab is active
+  useEffect(() => {
+    if (activeTab === "integrations") {
+      const fetchIntegrations = async () => {
+        try {
+          const res = await fetchWithAuth("/api/v1/integrations");
+          if (res.ok) {
+            const data = await res.json();
+            setIntegrations(data);
+          }
+        } catch (e) {
+          console.error("Failed to load integrations", e);
+        }
+      };
+      fetchIntegrations();
+    }
+  }, [activeTab]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth("/api/v1/settings/business", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(businessData),
+      });
+      if (res.ok) {
+        setSaved(true);
+        toast.success("Business profile saved successfully");
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        toast.error("Failed to save settings");
+      }
+    } catch (e) {
+      toast.error("Network error saving settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleNotification = (key: keyof typeof notifications) => {
+    setNotifications((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      localStorage.setItem("notificationPrefs", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
@@ -45,7 +134,7 @@ export default function SettingsPage() {
               </motion.div>
               <h1 className="font-heading font-black tracking-tighter text-4xl sm:text-5xl text-foreground">Settings</h1>
               <p className="text-sm font-medium mt-2" style={{ color: "var(--muted-foreground)" }}>
-                Manage your business profile, integrations, and preferences.
+                Manage your business profile, AI response automation, and integrations.
               </p>
             </div>
           </div>
@@ -83,13 +172,56 @@ export default function SettingsPage() {
               {activeTab === "business" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground mb-6">Business Profile</h2>
+                  
+                  {/* AI Response Automation Mode Card */}
+                  <div className="p-5 rounded-2xl border border-[#6D4AE2]/30 bg-gradient-to-r from-[#6D4AE2]/10 to-transparent space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Zap size={16} className="text-[#818CF8]" />
+                      <span className="text-[11px] font-black uppercase tracking-widest text-foreground">AI Response Automation Mode</span>
+                    </div>
+                    <p className="text-xs text-slate-300">Choose how AI handles incoming customer messages across connected social channels:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setBusinessData(prev => ({ ...prev, ai_response_mode: "review" }))}
+                        className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                          businessData.ai_response_mode === "review"
+                            ? "bg-[#6D4AE2]/20 border-[#818CF8] text-white shadow-md shadow-purple-950/20"
+                            : "bg-white/5 border-surface-border text-slate-400 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center justify-between">
+                          <span>👁️ Review Mode (Manual)</span>
+                          {businessData.ai_response_mode === "review" && <CheckCircle2 size={14} className="text-[#818CF8]" />}
+                        </div>
+                        <span className="text-[10px] text-slate-400 mt-2 block">AI generates draft suggestions. Agents review, edit, and click send.</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBusinessData(prev => ({ ...prev, ai_response_mode: "auto" }))}
+                        className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                          businessData.ai_response_mode === "auto"
+                            ? "bg-emerald-500/20 border-emerald-400 text-white shadow-md shadow-emerald-950/20"
+                            : "bg-white/5 border-surface-border text-slate-400 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center justify-between">
+                          <span>🚀 Auto AI Mode (Instant)</span>
+                          {businessData.ai_response_mode === "auto" && <CheckCircle2 size={14} className="text-emerald-400" />}
+                        </div>
+                        <span className="text-[10px] text-slate-400 mt-2 block">AI automatically responds to customer queries instantly 24/7 without agent approval.</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Business Name</label>
                       <input
                         type="text"
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
+                        value={businessData.name}
+                        onChange={(e) => setBusinessData(prev => ({ ...prev, name: e.target.value }))}
                         className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
                         placeholder="Your business name"
                       />
@@ -98,8 +230,8 @@ export default function SettingsPage() {
                       <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Business Email</label>
                       <input
                         type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        value={businessData.email}
+                        onChange={(e) => setBusinessData(prev => ({ ...prev, email: e.target.value }))}
                         className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
                         placeholder="business@example.com"
                       />
@@ -108,8 +240,8 @@ export default function SettingsPage() {
                       <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Website</label>
                       <input
                         type="text"
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
+                        value={businessData.website}
+                        onChange={(e) => setBusinessData(prev => ({ ...prev, website: e.target.value }))}
                         className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
                         placeholder="https://yourwebsite.com"
                       />
@@ -118,6 +250,8 @@ export default function SettingsPage() {
                       <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Phone</label>
                       <input
                         type="text"
+                        value={businessData.phone}
+                        onChange={(e) => setBusinessData(prev => ({ ...prev, phone: e.target.value }))}
                         className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
                         placeholder="+977 98XXXXXXXX"
                       />
@@ -127,18 +261,25 @@ export default function SettingsPage() {
                     <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Description</label>
                     <textarea
                       rows={3}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      value={businessData.description}
+                      onChange={(e) => setBusinessData(prev => ({ ...prev, description: e.target.value }))}
                       className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all resize-none"
                       placeholder="Brief description of your business"
                     />
                   </div>
                   <button
                     onClick={handleSave}
+                    disabled={saving}
                     className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow"
                   >
-                    {saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
-                    {saved ? "Saved!" : "Save Changes"}
+                    {saving ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : saved ? (
+                      <CheckCircle2 size={14} />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
                   </button>
                 </motion.div>
               )}
@@ -147,30 +288,49 @@ export default function SettingsPage() {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground mb-6">Connected Platforms</h2>
                   <div className="space-y-4">
-                    {[
-                      { name: "Facebook Messenger", icon: "📘", connected: true, desc: "Receive and reply to Messenger messages" },
-                      { name: "Instagram Direct", icon: "📸", connected: true, desc: "Manage Instagram DMs from your inbox" },
-                      { name: "WhatsApp Business", icon: "📱", connected: false, desc: "Connect your WhatsApp Business account" },
-                    ].map((p) => (
-                      <div key={p.name} className="flex items-center justify-between p-5 rounded-2xl border border-surface-border bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-white/5 border border-surface-border flex items-center justify-center text-xl">
-                            {p.icon}
+                    {["facebook", "instagram", "whatsapp", "email"].map(platform => {
+                      const integration = integrations.find(i => i.platform === platform);
+                      const isConnected = !!integration && integration.status === "active";
+                      const icons: any = {
+                        facebook: "📘", instagram: "📸", whatsapp: "📱", email: "📧"
+                      };
+                      const names: any = {
+                        facebook: "Facebook Messenger",
+                        instagram: "Instagram Direct",
+                        whatsapp: "WhatsApp Business",
+                        email: "Email (Gmail IMAP)"
+                      };
+                      const descs: any = {
+                        facebook: "Receive and reply to Messenger messages",
+                        instagram: "Manage Instagram DMs from your inbox",
+                        whatsapp: "Connect your WhatsApp Business account",
+                        email: "Send and receive emails from your custom support address"
+                      };
+                      return (
+                        <div key={platform} className="flex items-center justify-between p-5 rounded-2xl border border-surface-border bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-surface-border flex items-center justify-center text-xl">
+                              {icons[platform]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-foreground">{names[platform]}</p>
+                              {isConnected && integration.page_name ? (
+                                <p className="text-[11px] text-gray-400">Connected: {integration.page_name}</p>
+                              ) : (
+                                <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{descs[platform]}</p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-foreground">{p.name}</p>
-                            <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{p.desc}</p>
-                          </div>
+                          <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${
+                            isConnected
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                          }`}>
+                            {isConnected ? "Connected" : "Not connected"}
+                          </span>
                         </div>
-                        <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${
-                          p.connected
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-slate-500/10 text-slate-400 border-slate-500/20"
-                        }`}>
-                          {p.connected ? "Connected" : "Not connected"}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}
@@ -180,21 +340,27 @@ export default function SettingsPage() {
                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground mb-6">Notification Preferences</h2>
                   <div className="space-y-3">
                     {[
-                      { label: "New message received", desc: "Get notified when a customer sends a message", on: true },
-                      { label: "Urgent sentiment detected", desc: "Alert when BERT detects frustrated customer", on: true },
-                      { label: "AI draft generated", desc: "Notify when AI creates a reply suggestion", on: false },
-                      { label: "Agent assigned", desc: "Notify when a conversation is assigned", on: true },
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between p-4 rounded-2xl border border-surface-border bg-white/[0.02]">
-                        <div>
-                          <p className="text-sm font-bold text-foreground">{item.label}</p>
-                          <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{item.desc}</p>
+                      { key: "new_message", label: "New message received", desc: "Get notified when a customer sends a message" },
+                      { key: "urgent_sentiment", label: "Urgent sentiment detected", desc: "Alert when BERT detects frustrated customer" },
+                      { key: "ai_draft", label: "AI draft generated", desc: "Notify when AI creates a reply suggestion" },
+                      { key: "agent_assigned", label: "Agent assigned", desc: "Notify when a conversation is assigned" },
+                    ].map((item) => {
+                      const isOn = notifications[item.key as keyof typeof notifications];
+                      return (
+                        <div key={item.key} className="flex items-center justify-between p-4 rounded-2xl border border-surface-border bg-white/[0.02]">
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{item.label}</p>
+                            <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{item.desc}</p>
+                          </div>
+                          <div
+                            onClick={() => toggleNotification(item.key as keyof typeof notifications)}
+                            className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${isOn ? "bg-[#6D4AE2]" : "bg-white/10"}`}
+                          >
+                            <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-all ${isOn ? "right-0.5" : "left-0.5"}`} />
+                          </div>
                         </div>
-                        <div className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${item.on ? "bg-[#6D4AE2]" : "bg-white/10"}`}>
-                          <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-all ${item.on ? "right-0.5" : "left-0.5"}`} />
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

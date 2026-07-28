@@ -73,11 +73,12 @@ export default function LoginPage() {
 
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 z-10">
-                    <div className="w-9 h-9 rounded-xl bg-[#6D4AE2] flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                            <path d="M8 2L13 5.5V10.5L8 14L3 10.5V5.5L8 2Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
-                            <path d="M8 5.5L10.5 7V9L8 10.5L5.5 9V7L8 5.5Z" fill="white" />
-                        </svg>
+                    <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0 transition-transform hover:scale-105">
+                        <img
+                            src="/images/HaqDesk.png"
+                            alt="HaqDesk AI"
+                            className="w-full h-full object-contain"
+                        />
                     </div>
                     <span className="text-white font-bold text-[16px] tracking-tight">
                         HaqDesk<span className="text-[#818CF8]"> AI</span>
@@ -203,9 +204,9 @@ export default function LoginPage() {
                                 <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                                     Password
                                 </label>
-                                <button type="button" className="text-[11px] text-purple-400 hover:text-purple-300 transition-colors">
+                                <Link href="/forgot-password" className="text-[11px] text-purple-400 hover:text-purple-300 transition-colors">
                                     Forgot password?
-                                </button>
+                                </Link>
                             </div>
                             <div className="relative">
                                 <input

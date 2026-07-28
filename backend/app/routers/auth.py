@@ -235,3 +235,62 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         "role": new_user.role,
         "business_id": new_user.business_id
     }
+
+
+from app.services.email_service import send_password_reset_email
+from pydantic import BaseModel, EmailStr
+import time
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str
+    new_password: str
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    # Always return success even if email doesn't exist (prevents email enumeration)
+    if not user:
+        return {"message": "If that email exists, a reset link has been sent."}
+
+    reset_payload = {
+        "sub": user.email,
+        "type": "password_reset",
+        "exp": int(time.time()) + 3600  # 1 hour
+    }
+    reset_token = jwt.encode(reset_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+
+    send_password_reset_email(
+        to_email=user.email,
+        reset_url=reset_url,
+        user_name=user.name
+    )
+
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        decoded = jwt.decode(payload.reset_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if decoded.get("type") != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+        email = decoded.get("sub")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Reset link expired or invalid")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = pwd_context.hash(payload.new_password)
+    db.commit()
+
+    return {"message": "Password reset successful. You can now login with your new password."}

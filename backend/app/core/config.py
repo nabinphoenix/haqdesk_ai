@@ -48,12 +48,23 @@ class Settings(BaseSettings):
 
     VECTOR_DB_PATH: str = "./vector_db"
 
+    # Qdrant Vector Database
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION_NAME: str = "techsuru_collection"
+
     # Email (Gmail SMTP)
     MAIL_USERNAME: Optional[str] = None
     MAIL_PASSWORD: Optional[str] = None
     MAIL_FROM: Optional[str] = None
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_PORT: int = 587
+
+    # Email (Gmail IMAP Polling)
+    TECHSURU_IMAP_EMAIL: Optional[str] = None
+    TECHSURU_IMAP_PASSWORD: Optional[str] = None
+    TECHSURU_IMAP_HOST: str = "imap.gmail.com"
+    TECHSURU_IMAP_PORT: int = 993
 
     class Config:
         env_file = ".env"

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, Boolean
 from sqlalchemy.sql import func
 from ..core.database import Base
 import enum
@@ -17,5 +17,8 @@ class Conversation(Base):
     assigned_agent_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     status = Column(String, default=ConversationStatus.OPEN)
     priority = Column(String, default="medium")
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    last_read_at = Column(DateTime(timezone=True), nullable=True)

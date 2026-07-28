@@ -62,34 +62,57 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState<TeamMember["role"]>("Agent");
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
+  const [generatingLink, setGeneratingLink] = useState(false);
 
-  // Fetch team members from API on mount
+  const [aiDraftsCount, setAiDraftsCount] = useState(0);
+
+  // Fetch team members, conversations, and analytics from API on mount
   useEffect(() => {
-    const fetchMembers = async () => {
+    const fetchAllData = async () => {
       try {
-        const res = await fetchWithAuth("/api/v1/team/members");
-        if (res.ok) {
-          const data = await res.json();
+        const [membersRes, conversationsRes, analyticsRes] = await Promise.all([
+          fetchWithAuth("/api/v1/team/members"),
+          fetchWithAuth("/api/v1/inbox/conversations"),
+          fetchWithAuth("/api/v1/analytics/summary")
+        ]);
+
+        let convs: any[] = [];
+        if (conversationsRes.ok) {
+          convs = await conversationsRes.json();
+        }
+
+        if (analyticsRes.ok) {
+          const summary = await analyticsRes.json();
+          setAiDraftsCount(summary.ai_drafts_generated || 0);
+        }
+
+        if (membersRes.ok) {
+          const data = await membersRes.json();
           setMembers(
-            data.map((m: any) => ({
-              id: m.id,
-              name: m.name || "Unknown",
-              email: m.email,
-              role: mapRole(m.role),
-              status: (m.status as TeamMember["status"]) || "offline",
-              conversations: 0,
-              avgResponse: "—",
-              joinedAt: m.created_at
-                ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
-                : "—",
-            }))
+            data.map((m: any) => {
+              // Count conversations assigned to this member
+              const memberConvsCount = convs.filter((c: any) => c.assigned_agent_id === m.id).length;
+
+              return {
+                id: m.id,
+                name: m.name || "Unknown",
+                email: m.email,
+                role: mapRole(m.role),
+                status: (m.status as TeamMember["status"]) || "offline",
+                conversations: memberConvsCount,
+                avgResponse: "—",
+                joinedAt: m.created_at
+                  ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+                  : "—",
+              };
+            })
           );
         }
-      } catch {
-        // Silently fail — members will stay empty
+      } catch (err) {
+        console.error("Failed to fetch data", err);
       }
     };
-    fetchMembers();
+    fetchAllData();
   }, []);
 
   const onlineCount = members.filter((m) => m.status === "online").length;
@@ -113,30 +136,36 @@ export default function TeamPage() {
     }
   };
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim()) return;
-
+  const handleGenerateInviteLink = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    setGeneratingLink(true);
+    const token = localStorage.getItem("token") || "";
     try {
-      const res = await fetchWithAuth(`/api/v1/team/invite`, {
+      const res = await fetch(`${API_URL}/api/v1/team/invite-link`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email: inviteEmail, role: inviteRole.toLowerCase() }),
       });
-
       const data = await res.json();
-
       if (res.ok) {
+        setInviteUrl(data.invite_url);
         setInviteSent(true);
-        setInviteUrl(data.invite_url || "");
-        toast.success(`Invite sent to ${inviteEmail}`);
+        if (data.email_sent) {
+          toast.success(`Invite email sent to ${inviteEmail}`);
+        } else {
+          toast.warning("Link generated, but email failed. Share the link manually.");
+        }
       } else {
-        toast.error(data.detail || "Failed to send invitation.");
+        toast.error(data.detail || "Failed to generate invite");
       }
     } catch {
-      toast.error("Cannot connect to server.");
+      toast.error("Network error");
+    } finally {
+      setGeneratingLink(false);
     }
   };
 
@@ -159,7 +188,7 @@ export default function TeamPage() {
     { label: "Total Members", value: members.length.toString(), icon: Users, color: "#818CF8" },
     { label: "Online Now", value: onlineCount.toString(), icon: CheckCircle2, color: "#10B981" },
     { label: "Avg Response", value: "—", icon: Clock, color: "#06B6D4" },
-    { label: "AI Drafts Used", value: "—", icon: Bot, color: "#F59E0B" },
+    { label: "AI Drafts Used", value: aiDraftsCount.toLocaleString(), icon: Bot, color: "#F59E0B" },
     { label: "Roles Active", value: roleCount.toString(), icon: Shield, color: "#818CF8" },
   ];
 
@@ -366,20 +395,17 @@ export default function TeamPage() {
                   </button>
                 </motion.div>
               ) : (
-                <form onSubmit={handleInvite} className="space-y-4">
+                <form onSubmit={handleGenerateInviteLink} className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Email Address</label>
-                    <div className="relative">
-                      <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                      <input
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="colleague@example.com"
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-slate-600 focus:border-purple-500 focus:outline-none transition-all"
-                        required
-                      />
-                    </div>
+                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Agent Email</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-600 focus:border-purple-500 focus:outline-none transition-all"
+                      placeholder="agent@example.com"
+                      required
+                    />
                   </div>
 
                   <div>
@@ -408,10 +434,17 @@ export default function TeamPage() {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                      disabled={generatingLink}
+                      className="flex-1 py-2.5 rounded-xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                     >
-                      <UserPlus size={13} strokeWidth={2.5} />
-                      Send Invite
+                      {generatingLink ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <UserPlus size={13} strokeWidth={2.5} />
+                          Send Invite
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>

@@ -165,10 +165,14 @@ async def link_customer(customer_id: int, req: LinkRequest, db: Session = Depend
     )
     db.add(identity)
     
-    # Mark as merged
+    # Mark as merged and reassign conversations to master
     merged.is_merged = True
     merged.merged_into_id = master.id
-    
+
+    db.query(Conversation).filter(
+        Conversation.customer_id == merged.id
+    ).update({Conversation.customer_id: master.id}, synchronize_session=False)
+
     db.commit()
     return {"status": "success"}
 

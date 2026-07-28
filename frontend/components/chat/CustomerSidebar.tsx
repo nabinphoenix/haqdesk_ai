@@ -32,9 +32,10 @@ interface CustomerProfile {
 interface CustomerSidebarProps {
     customerId: string | number;
     platform?: string;
+    conv?: any;
 }
 
-export default function CustomerSidebar({ customerId, platform }: CustomerSidebarProps) {
+export default function CustomerSidebar({ customerId, platform, conv }: CustomerSidebarProps) {
     const [profile, setProfile] = useState<CustomerProfile | null>(null);
     const [notes, setNotes] = useState("");
     const [isSaving, setIsSaving] = useState(false);
@@ -152,6 +153,12 @@ export default function CustomerSidebar({ customerId, platform }: CustomerSideba
                 <p className="text-[11px] text-gray-400 text-center mt-0.5 uppercase tracking-wider">
                     {(platform || profile.platforms[0])} · Customer
                 </p>
+                {conv?.platform === "email" && conv?.customer_email && (
+                    <p className="text-[11px] text-gray-400 mt-0.5 flex items-center justify-center gap-1">
+                        <Mail size={10} />
+                        {conv.customer_email}
+                    </p>
+                )}
                 
                 {/* Platform Badges */}
                 <div className="flex items-center justify-center gap-1">
