@@ -79,3 +79,6 @@ qdrant_storage/
 # Uploaded files
 backend/uploads/
 uploads/
+
+# Generated database backups (may contain customer data)
+backend/backups/

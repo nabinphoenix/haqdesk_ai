@@ -31,3 +31,14 @@ def test_register_duplicate_business():
         "business_name": "Tech Suru"  # existing business
     })
     assert response.status_code == 400
+
+@pytest.mark.parametrize("business_name", ["", "   ", None])
+def test_register_requires_non_empty_business_name(business_name):
+    response = client.post("/api/v1/auth/register", json={
+        "name": "Business Validation Test",
+        "email": "business-validation-test@example.com",
+        "password": "test123",
+        "business_name": business_name,
+    })
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Business name is required"}

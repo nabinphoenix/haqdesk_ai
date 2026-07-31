@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { AlertCircle, Eye, EyeOff, CheckCircle2, UserPlus, Shield, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, UserPlus, Shield, Loader2 } from "lucide-react";
+import PasswordField from "@/components/ui/PasswordField";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -17,7 +18,6 @@ function AcceptInviteContent() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [validating, setValidating] = useState(true);
@@ -319,45 +319,26 @@ function AcceptInviteContent() {
                                 </div>
 
                                 {/* Password */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                                        Password
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? "text" : "password"}
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-600 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all"
-                                            placeholder="••••••••"
-                                            required
-                                            minLength={6}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                                        </button>
-                                    </div>
-                                </div>
+                                <PasswordField
+                                    id="invite-password"
+                                    label="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    minLength={6}
+                                />
 
                                 {/* Confirm Password */}
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                                        Confirm Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-600 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all"
-                                        placeholder="••••••••"
-                                        required
-                                        minLength={6}
-                                    />
-                                </div>
+                                <PasswordField
+                                    id="invite-confirm-password"
+                                    label="Confirm Password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    minLength={6}
+                                />
 
                                 <button
                                     type="submit"

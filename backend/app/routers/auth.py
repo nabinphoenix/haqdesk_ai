@@ -8,7 +8,6 @@ from passlib.context import CryptContext
 import bcrypt as _bcrypt
 import hashlib
 import binascii
-import traceback
 
 from app.core.database import get_db
 from app.models.user import User, UserRole
@@ -20,6 +19,8 @@ from authlib.integrations.starlette_client import OAuth
 from app.auth.utils import get_or_create_user_by_email, pwd_context, hash_password
 from app.core.dependencies import get_current_user
 import uuid
+
+logger = logging.getLogger(__name__)
 
 # In-memory store for OAuth codes (FYP-level approach)
 OAUTH_CODES = {}
@@ -44,10 +45,12 @@ async def google_login(request: Request):
 @router.get('/google/callback')
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     """Handle Google OAuth callback, exchange code, issue JWT and redirect to frontend"""
+    stage = "token_exchange"
     try:
         token = await oauth.google.authorize_access_token(request)
 
         # Try userinfo endpoint first, fall back to id_token claims
+        stage = "userinfo"
         userinfo = token.get('userinfo')
         if not userinfo:
             userinfo = await oauth.google.userinfo(token=token)
@@ -63,6 +66,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             error_url = f"{settings.FRONTEND_URL}/oauth/callback?error=unverified_email"
             return Response(status_code=302, headers={'Location': error_url})
         # Get or create local user, passing google fields
+        stage = "user_and_business_link"
         user = get_or_create_user_by_email(db, email, name, google_id=google_id, avatar_url=avatar_url)
         # Create temporary one-time code
         code = str(uuid.uuid4())
@@ -72,8 +76,12 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         redirect_url = f"{settings.FRONTEND_URL}/oauth/callback?code={code}"
         return Response(status_code=302, headers={'Location': redirect_url})
     except Exception as e:
-        logging.error("OAuth callback error full traceback:")
-        logging.error(traceback.format_exc())
+        db.rollback()
+        logger.exception(
+            "Google OAuth callback failed at stage=%s error_type=%s",
+            stage,
+            type(e).__name__,
+        )
         error_url = f"{settings.FRONTEND_URL}/oauth/callback?error=oauth_failed"
         return Response(status_code=302, headers={'Location': error_url})
 
@@ -183,12 +191,16 @@ async def read_current_user(current_user: User = Depends(get_current_user)):
 @router.post('/register')
 async def register_user(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
-    name = payload.get('name') or payload.get('fullName')
-    email = payload.get('email')
+    name = (payload.get('name') or payload.get('fullName') or '').strip()
+    email = (payload.get('email') or '').strip().lower()
     password = payload.get('password')
-    business_name = payload.get('business_name') or payload.get('businessName')
+    business_name = (payload.get('business_name') or payload.get('businessName') or '').strip()
 
-    if not all([name, email, password]):
+    if not name:
+        raise HTTPException(status_code=400, detail='Full name is required')
+    if not business_name:
+        raise HTTPException(status_code=400, detail='Business name is required')
+    if not email or not password:
         raise HTTPException(status_code=400, detail='Missing required fields')
 
     existing = db.query(User).filter(User.email == email).first()

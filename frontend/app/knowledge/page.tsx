@@ -44,6 +44,8 @@ export default function KnowledgeBase() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDeleteDocId, setConfirmDeleteDocId] = useState<number | null>(null);
   const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const isAdmin = userRole === "business_admin" || userRole === "super_admin";
 
   const [editingDoc, setEditingDoc] = useState<KnowledgeDoc | null>(null);
   const [editingChunks, setEditingChunks] = useState<any[]>([]);
@@ -103,12 +105,17 @@ export default function KnowledgeBase() {
   };
 
   useEffect(() => {
+    setUserRole(localStorage.getItem("userRole"));
     fetchDocuments();
     const interval = setInterval(fetchDocuments, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const uploadFile = async (file: File) => {
+    if (!isAdmin) {
+      toast.error("Administrator access required");
+      return;
+    }
     const allowedExtensions = ["pdf", "docx", "txt"];
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!ext || !allowedExtensions.includes(ext)) {
@@ -227,6 +234,7 @@ export default function KnowledgeBase() {
         onConfirm={executeDeleteDoc}
         onCancel={() => setConfirmDeleteDocId(null)}
         isDangerous={true}
+        isPending={isDeletingDoc}
       />
 
       <div className="page-shell">
@@ -247,14 +255,16 @@ export default function KnowledgeBase() {
                 Upload documents to power your AI reply suggestions.
               </p>
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95 disabled:opacity-50"
-            >
-              <Upload size={16} strokeWidth={2.5} />
-              Upload Document
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Upload size={16} strokeWidth={2.5} />
+                Upload Document
+              </button>
+            )}
           </div>
 
           {/* Search bar */}
@@ -375,19 +385,21 @@ export default function KnowledgeBase() {
                     {doc.status === "processing" && <div className="w-3 h-3 border-2 border-[#818CF8] border-t-transparent rounded-full animate-spin" />}
                     {doc.status === "ready" && <CheckCircle2 size={14} className="text-emerald-400" />}
                     {doc.status === "failed" && <div className="w-3 h-3 rounded-full bg-red-500" />}
-                    <button
-                      onClick={(e) => handleDelete(doc.id, e)}
-                      className="p-1.5 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => handleDelete(doc.id, e)}
+                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                     <ChevronRight size={14} className="text-slate-600" />
                   </div>
                 </motion.div>
               ))}
 
               {/* Upload placeholder */}
-              <div
+              {isAdmin && <div
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-4 p-4 rounded-2xl border border-dashed border-surface-border bg-white/[0.01] hover:border-[#818CF8]/30 hover:bg-white/[0.04] transition-all cursor-pointer group"
               >
@@ -395,7 +407,7 @@ export default function KnowledgeBase() {
                   <Plus size={18} />
                 </div>
                 <span className="text-[12px] font-bold text-slate-500 group-hover:text-[#818CF8] transition-colors uppercase tracking-wider">Upload new document</span>
-              </div>
+              </div>}
             </div>
 
             {/* RIGHT: Detail panel or Query result */}
@@ -448,20 +460,24 @@ export default function KnowledgeBase() {
                       <Bot size={13} />
                       Test with AI
                     </button>
-                    <button
-                      onClick={() => { setEditingDoc(selectedDoc); loadDocumentChunks(selectedDoc.id); }}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[11px] font-black uppercase tracking-wider transition-all"
-                    >
-                      <Edit3 size={13} />
-                      Edit Content
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(selectedDoc.id, e)}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-wider transition-all"
-                    >
-                      <Trash2 size={13} />
-                      Delete
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => { setEditingDoc(selectedDoc); loadDocumentChunks(selectedDoc.id); }}
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[11px] font-black uppercase tracking-wider transition-all"
+                        >
+                          <Edit3 size={13} />
+                          Edit Content
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(selectedDoc.id, e)}
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-wider transition-all"
+                        >
+                          <Trash2 size={13} />
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               ) : queryResult ? (

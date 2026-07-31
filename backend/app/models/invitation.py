@@ -12,5 +12,6 @@ class Invitation(Base):
     role = Column(String, nullable=False, default="agent")
     token = Column(String, unique=True, nullable=False, index=True)
     accepted = Column(Boolean, default=False)
+    revoked = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)

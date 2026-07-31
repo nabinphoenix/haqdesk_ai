@@ -29,3 +29,31 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
     
     return user
+
+
+def require_business_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Require an administrator role for business-wide mutations."""
+    if current_user.role not in ("business_admin", "super_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required",
+        )
+    if current_user.role != "super_admin" and not current_user.business_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No business associated",
+        )
+    return current_user
+
+
+def require_super_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.role != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super administrator access required",
+        )
+    return current_user

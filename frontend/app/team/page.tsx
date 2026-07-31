@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithAuth } from "@/lib/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 interface TeamMember {
   id: number;
@@ -63,8 +62,16 @@ export default function TeamPage() {
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   const [aiDraftsCount, setAiDraftsCount] = useState(0);
+  const isAdmin = userRole === "business_admin" || userRole === "super_admin";
+
+  useEffect(() => {
+    setUserRole(localStorage.getItem("userRole"));
+  }, []);
 
   // Fetch team members, conversations, and analytics from API on mount
   useEffect(() => {
@@ -117,22 +124,30 @@ export default function TeamPage() {
 
   const onlineCount = members.filter((m) => m.status === "online").length;
 
-  const handleRemove = async (id: number) => {
-    const member = members.find((m) => m.id === id);
-    if (!member) return;
+  const handleRemove = (id: number) => {
+    const member = members.find((item) => item.id === id);
+    if (member) setMemberToRemove(member);
+  };
+
+  const executeRemove = async () => {
+    if (!memberToRemove) return;
+    setIsRemovingMember(true);
     try {
-      const res = await fetchWithAuth(`/api/v1/team/members/${id}`, {
+      const res = await fetchWithAuth(`/api/v1/team/members/${memberToRemove.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        setMembers((prev) => prev.filter((m) => m.id !== id));
-        toast.success(`Removed ${member.name} from the team.`);
+        setMembers((prev) => prev.filter((member) => member.id !== memberToRemove.id));
+        toast.success(`Removed ${memberToRemove.name} from the team.`);
+        setMemberToRemove(null);
       } else {
         const data = await res.json();
         toast.error(data.detail || "Failed to remove member.");
       }
     } catch {
       toast.error("Cannot connect to server.");
+    } finally {
+      setIsRemovingMember(false);
     }
   };
 
@@ -143,12 +158,11 @@ export default function TeamPage() {
       return;
     }
     setGeneratingLink(true);
-    const token = localStorage.getItem("token") || "";
     try {
-      const res = await fetch(`${API_URL}/api/v1/team/invite-link`, {
+      const res = await fetchWithAuth("/api/v1/team/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email: inviteEmail, role: inviteRole.toLowerCase() }),
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole.toLowerCase() }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -194,6 +208,21 @@ export default function TeamPage() {
 
   return (
     <div className="page-padded font-body">
+      <ConfirmModal
+        isOpen={memberToRemove !== null}
+        title="Remove Team Member"
+        message={
+          memberToRemove
+            ? `${memberToRemove.name} will lose access to this business and its conversations.`
+            : ""
+        }
+        confirmLabel={isRemovingMember ? "Removing…" : "Remove Member"}
+        cancelLabel="Cancel"
+        onConfirm={executeRemove}
+        onCancel={() => setMemberToRemove(null)}
+        isDangerous
+        isPending={isRemovingMember}
+      />
       <div className="page-shell">
 
         {/* Header */}
@@ -213,13 +242,15 @@ export default function TeamPage() {
                 Manage your support agents, roles, and access.
               </p>
             </div>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95"
-            >
-              <UserPlus size={16} strokeWidth={2.5} />
-              Invite Member
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95"
+              >
+                <UserPlus size={16} strokeWidth={2.5} />
+                Invite Member
+              </button>
+            )}
           </div>
         </header>
 
@@ -307,12 +338,14 @@ export default function TeamPage() {
                   </div>
 
                   {/* Remove */}
-                  <button
-                    onClick={() => handleRemove(member.id)}
-                    className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 size={13} strokeWidth={2} />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleRemove(member.id)}
+                      className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={13} strokeWidth={2} />
+                    </button>
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>

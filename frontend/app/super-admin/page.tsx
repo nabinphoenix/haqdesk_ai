@@ -1,93 +1,88 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import {
-  Building2,
-  Users,
-  Brain,
-  Activity,
-  Shield,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Trash2,
-  Plus,
-  Search,
-  Filter,
-  Download,
-  RefreshCw,
-  Globe,
-  Database,
-  Cpu,
-  DollarSign,
+  Activity, Brain, Building2, Cpu, Database, Globe, MessageSquare,
+  RefreshCw, Search, Shield, Users,
 } from "lucide-react";
-
-// --- Mock Data ---
-const mockBusinesses = [
-  { id: 1, name: "TechSuru Pvt Ltd", owner: "Nabin Nepali", plan: "Pro", status: "active", messages: 1240, agents: 4, joined: "2025-01-15", revenue: "$49" },
-  { id: 2, name: "Sasto Pasal", owner: "Ramesh KC", plan: "Starter", status: "active", messages: 430, agents: 2, joined: "2025-02-20", revenue: "$19" },
-  { id: 3, name: "Kathmandu Eats", owner: "Sita Sharma", plan: "Pro", status: "suspended", messages: 890, agents: 3, joined: "2025-03-10", revenue: "$49" },
-  { id: 4, name: "Nepal Treks", owner: "Hari Thapa", plan: "Enterprise", status: "active", messages: 3200, agents: 10, joined: "2025-01-05", revenue: "$149" },
-  { id: 5, name: "Digital Pasal", owner: "Rita Gurung", plan: "Starter", status: "inactive", messages: 120, agents: 1, joined: "2025-04-01", revenue: "$19" },
-];
-
-const mockStats = [
-  { label: "Total Businesses", value: "24", change: "+3 this month", icon: Building2, color: "text-purple-400", bg: "bg-purple-500/10" },
-  { label: "Total Users", value: "142", change: "+12 this month", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
-  { label: "AI Drafts Generated", value: "18,420", change: "+2.1k this week", icon: Brain, color: "text-green-400", bg: "bg-green-500/10" },
-  { label: "Monthly Revenue", value: "$1,840", change: "+18% vs last month", icon: DollarSign, color: "text-yellow-400", bg: "bg-yellow-500/10" },
-  { label: "Active Integrations", value: "67", change: "FB + IG + WA", icon: Globe, color: "text-cyan-400", bg: "bg-cyan-500/10" },
-  { label: "System Uptime", value: "99.9%", change: "Last 30 days", icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-];
-
-const mockSystemHealth = [
-  { label: "FastAPI Backend", status: "healthy", latency: "12ms" },
-  { label: "PostgreSQL + pgvector", status: "healthy", latency: "4ms" },
-  { label: "RAG Pipeline", status: "healthy", latency: "1.8s" },
-  { label: "Groq LLM API", status: "healthy", latency: "1.2s" },
-  { label: "Redis Queue", status: "warning", latency: "45ms" },
-  { label: "Meta Webhook", status: "healthy", latency: "220ms" },
-];
-
-const mockRecentActivity = [
-  { id: 1, action: "New business registered", target: "Digital Pasal", time: "2m ago", type: "success" },
-  { id: 2, action: "RAG document uploaded", target: "TechSuru Pvt Ltd", time: "15m ago", type: "info" },
-  { id: 3, action: "Business suspended", target: "Kathmandu Eats", time: "1h ago", type: "warning" },
-  { id: 4, action: "New agent added", target: "Nepal Treks", time: "2h ago", type: "success" },
-  { id: 5, action: "Webhook failure", target: "Sasto Pasal", time: "3h ago", type: "error" },
-];
+import { fetchWithAuth } from "@/lib/api";
 
 type Tab = "overview" | "businesses" | "system" | "activity";
+type Stat = { key: string; label: string; value: number; change: string };
+type Business = {
+  id: number; name: string; owner: string; status: string; users: number;
+  agents: number; messages: number; joined: string | null;
+};
+type ActivityItem = {
+  action: string; target: string; type: "success" | "info" | "warning" | "error";
+  timestamp: string | null;
+};
+type Dashboard = {
+  stats: Stat[];
+  businesses: Business[];
+  recent_activity: ActivityItem[];
+  database_stats: { label: string; value: number }[];
+  system_health: { label: string; status: string; detail: string }[];
+  generated_at: string;
+};
+
+const statIcons: Record<string, typeof Building2> = {
+  businesses: Building2, users: Users, ai_drafts: Brain, messages: MessageSquare,
+  integrations: Globe, conversations: Activity,
+};
+
+function relativeTime(value: string | null) {
+  if (!value) return "Unknown time";
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
 
 export default function SuperAdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [mounted, setMounted] = useState(false);
+  const [data, setData] = useState<Dashboard | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setMounted(true);
-    const role = localStorage.getItem("userRole");
-    if (role !== "super_admin") {
-      router.push("/inbox");
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetchWithAuth("/api/v1/super-admin/dashboard");
+      if (response.status === 401 || response.status === 403) {
+        router.replace("/inbox");
+        return;
+      }
+      if (!response.ok) throw new Error("Dashboard request failed");
+      setData(await response.json());
+    } catch {
+      setError("Could not load platform data. Please retry.");
+    } finally {
+      setLoading(false);
     }
   }, [router]);
 
-  if (!mounted) return null;
+  useEffect(() => {
+    if (localStorage.getItem("userRole") !== "super_admin") {
+      router.replace("/inbox");
+      return;
+    }
+    void loadDashboard();
+  }, [loadDashboard, router]);
 
-  const filteredBusinesses = mockBusinesses.filter((b) => {
-    const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.owner.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || b.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredBusinesses = useMemo(() => (data?.businesses ?? []).filter((business) => {
+    const query = searchQuery.toLowerCase();
+    return (business.name.toLowerCase().includes(query) || business.owner.toLowerCase().includes(query))
+      && (statusFilter === "all" || business.status === statusFilter);
+  }), [data, searchQuery, statusFilter]);
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
+  const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
     { id: "overview", label: "Overview", icon: Activity },
     { id: "businesses", label: "Businesses", icon: Building2 },
     { id: "system", label: "System Health", icon: Cpu },
@@ -95,368 +90,120 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#090514] pt-[60px]">
-      <div className="max-w-[1280px] mx-auto px-6 py-8">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-background pt-[60px] text-foreground transition-colors">
+      <main className="mx-auto max-w-[1280px] px-6 py-8">
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Shield size={18} className="text-purple-400" />
-              <span className="text-xs font-bold uppercase tracking-widest text-purple-400">
-                Super Admin
-              </span>
+            <div className="mb-1 flex items-center gap-2 text-accent">
+              <Shield size={18} />
+              <span className="text-xs font-bold uppercase tracking-widest">Super Admin</span>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              HaqDesk AI Control Center
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              Manage all businesses, users, and system health
-            </p>
+            <h1 className="text-2xl font-black">HaqDesk AI Control Center</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">Platform-wide businesses, users, and service health</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-all text-sm">
-              <RefreshCw size={14} />
-              Refresh
+          <button onClick={() => void loadDashboard()} disabled={loading} className="ds-button ds-button-secondary">
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+        </header>
+
+        <nav className="mb-8 flex gap-1 overflow-x-auto border-b border-border" aria-label="Dashboard sections">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setActiveTab(id)}
+              className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium ${
+                activeTab === id ? "border-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}>
+              <Icon size={14} /> {label}
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white transition-all text-sm font-medium">
-              <Plus size={14} />
-              Add Business
-            </button>
-          </div>
-        </div>
+          ))}
+        </nav>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-8 border-b border-white/10">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
-                  activeTab === tab.id
-                    ? "border-purple-500 text-white"
-                    : "border-transparent text-gray-400 hover:text-white"
-                }`}
-              >
-                <Icon size={14} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {error && <div role="alert" className="mb-6 rounded-xl border border-[var(--error-border)] bg-[var(--error-surface)] p-4 text-sm text-[var(--error-foreground)]">{error}</div>}
+        {loading && !data && <div className="py-20 text-center text-muted-foreground">Loading live platform data…</div>}
 
-        {/* OVERVIEW TAB */}
-        {activeTab === "overview" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              {mockStats.map((stat, i) => {
-                const Icon = stat.icon;
-                return (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 hover:bg-white/[0.06] transition-all"
-                  >
-                    <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
-                      <Icon size={18} className={stat.color} />
-                    </div>
-                    <p className="text-2xl font-black text-white mb-0.5">{stat.value}</p>
-                    <p className="text-xs font-medium text-gray-400">{stat.label}</p>
-                    <p className="text-[11px] text-green-400 mt-1">{stat.change}</p>
-                  </motion.div>
-                );
+        {data && activeTab === "overview" && (
+          <>
+            <section className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-3" aria-label="Platform statistics">
+              {data.stats.map((stat) => {
+                const Icon = statIcons[stat.key] ?? Activity;
+                return <article key={stat.key} className="ds-card p-5">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-accent"><Icon size={18} /></div>
+                  <p className="text-2xl font-black text-foreground">{stat.value.toLocaleString()}</p>
+                  <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+                  <p className="mt-1 text-[11px] text-[var(--success-foreground)]">{stat.change}</p>
+                </article>;
               })}
-            </div>
-
-            {/* Bottom row: top businesses + recent activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Top businesses by messages */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                  <TrendingUp size={14} className="text-purple-400" />
-                  Top Businesses by Activity
-                </h3>
+            </section>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <section className="ds-card p-6">
+                <h2 className="mb-4 text-sm font-bold">Top Businesses by Messages</h2>
                 <div className="space-y-3">
-                  {mockBusinesses
-                    .sort((a, b) => b.messages - a.messages)
-                    .slice(0, 4)
-                    .map((b) => (
-                      <div key={b.id} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
-                            {b.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="text-[13px] font-semibold text-white">{b.name}</p>
-                            <p className="text-[11px] text-gray-400">{b.plan} plan</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[13px] font-bold text-white">{b.messages.toLocaleString()}</p>
-                          <p className="text-[11px] text-gray-400">messages</p>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* Recent activity */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                  <Activity size={14} className="text-cyan-400" />
-                  Recent Activity
-                </h3>
-                <div className="space-y-3">
-                  {mockRecentActivity.map((a) => (
-                    <div key={a.id} className="flex items-start gap-3">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                        a.type === "success" ? "bg-green-400" :
-                        a.type === "warning" ? "bg-yellow-400" :
-                        a.type === "error" ? "bg-red-400" :
-                        "bg-blue-400"
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] text-white">{a.action}</p>
-                        <p className="text-[11px] text-gray-400">{a.target} · {a.time}</p>
-                      </div>
+                  {[...data.businesses].sort((a, b) => b.messages - a.messages).slice(0, 5).map((business) => (
+                    <div key={business.id} className="flex items-center justify-between rounded-xl bg-surface-wash p-3">
+                      <div><p className="text-sm font-semibold">{business.name}</p><p className="text-xs text-muted-foreground">{business.agents} agents</p></div>
+                      <span className="text-sm font-bold">{business.messages.toLocaleString()}</span>
                     </div>
                   ))}
+                  {!data.businesses.length && <p className="text-sm text-muted-foreground">No businesses yet.</p>}
                 </div>
-              </div>
-
+              </section>
+              <ActivityList items={data.recent_activity.slice(0, 5)} title="Recent Platform Activity" />
             </div>
-          </motion.div>
+          </>
         )}
 
-        {/* BUSINESSES TAB */}
-        {activeTab === "businesses" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-
-            {/* Filters */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex-1 relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search businesses or owners..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-[13px] text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all"
-                />
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-[13px] text-white focus:border-purple-500 focus:outline-none transition-all"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-                <option value="inactive">Inactive</option>
+        {data && activeTab === "businesses" && (
+          <section className="ds-card overflow-hidden">
+            <div className="flex flex-wrap gap-3 border-b border-border p-4">
+              <label className="relative flex-1">
+                <span className="sr-only">Search businesses</span><Search size={14} className="absolute left-3 top-3.5 text-muted-foreground" />
+                <input className="ds-input pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search businesses or owners…" />
+              </label>
+              <select className="ds-input w-auto" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option>
               </select>
-              <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-all text-[13px]">
-                <Download size={14} />
-                Export
-              </button>
             </div>
-
-            {/* Table */}
-            <div className="rounded-2xl border border-white/10 overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03]">
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Business</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Owner</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Plan</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Status</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Messages</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Agents</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Revenue</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBusinesses.map((b, i) => (
-                    <tr
-                      key={b.id}
-                      className="border-b border-white/5 hover:bg-white/[0.03] transition-all"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold shrink-0">
-                            {b.name.charAt(0)}
-                          </div>
-                          <span className="text-[13px] font-semibold text-white">{b.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-[13px] text-gray-300">{b.owner}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                          b.plan === "Enterprise" ? "bg-yellow-500/20 text-yellow-400" :
-                          b.plan === "Pro" ? "bg-purple-500/20 text-purple-400" :
-                          "bg-gray-500/20 text-gray-400"
-                        }`}>
-                          {b.plan}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`flex items-center gap-1.5 text-[11px] font-bold w-fit px-2 py-0.5 rounded-full ${
-                          b.status === "active" ? "bg-green-500/20 text-green-400" :
-                          b.status === "suspended" ? "bg-red-500/20 text-red-400" :
-                          "bg-gray-500/20 text-gray-400"
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            b.status === "active" ? "bg-green-400" :
-                            b.status === "suspended" ? "bg-red-400" :
-                            "bg-gray-400"
-                          }`} />
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[13px] text-gray-300">{b.messages.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[13px] text-gray-300">{b.agents}</td>
-                      <td className="px-4 py-3 text-[13px] font-semibold text-green-400">{b.revenue}/mo</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button className="p-1.5 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-all">
-                            <Eye size={13} />
-                          </button>
-                          <button className="p-1.5 rounded-lg text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="text-xs text-gray-500 mt-3">{filteredBusinesses.length} businesses found</p>
-          </motion.div>
+            <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+              <thead className="bg-surface-wash text-xs text-muted-foreground"><tr>
+                <th className="p-4">Business</th><th className="p-4">Owner</th><th className="p-4">Status</th>
+                <th className="p-4">Messages</th><th className="p-4">Agents</th><th className="p-4">Joined</th>
+              </tr></thead>
+              <tbody className="divide-y divide-border">{filteredBusinesses.map((business) => <tr key={business.id}>
+                <td className="p-4 font-semibold">{business.name}</td><td className="p-4 text-muted-foreground">{business.owner}</td>
+                <td className="p-4"><span className="rounded-full bg-surface-wash px-2 py-1 text-xs">{business.status}</span></td>
+                <td className="p-4">{business.messages.toLocaleString()}</td><td className="p-4">{business.agents}</td>
+                <td className="p-4 text-muted-foreground">{business.joined ? new Date(business.joined).toLocaleDateString() : "—"}</td>
+              </tr>)}</tbody>
+            </table></div>
+            <p className="p-4 text-xs text-muted-foreground">{filteredBusinesses.length} businesses found</p>
+          </section>
         )}
 
-        {/* SYSTEM HEALTH TAB */}
-        {activeTab === "system" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {data && activeTab === "system" && <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="ds-card p-6"><h2 className="mb-5 flex items-center gap-2 text-sm font-bold"><Cpu size={14} className="text-accent" />Service Status</h2>
+            <div className="space-y-3">{data.system_health.map((service) => <div key={service.label} className="flex justify-between rounded-xl bg-surface-wash p-3">
+              <span className="text-sm font-medium">{service.label}</span><span className="text-xs text-[var(--success-foreground)]">{service.status} · {service.detail}</span>
+            </div>)}</div>
+          </section>
+          <section className="ds-card p-6"><h2 className="mb-5 flex items-center gap-2 text-sm font-bold"><Database size={14} className="text-accent" />Database Stats</h2>
+            <dl className="space-y-3">{data.database_stats.map((item) => <div key={item.label} className="flex justify-between border-b border-border pb-3">
+              <dt className="text-sm text-muted-foreground">{item.label}</dt><dd className="font-bold">{item.value.toLocaleString()}</dd>
+            </div>)}</dl>
+          </section>
+        </div>}
 
-              {/* Service status */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <h3 className="text-sm font-bold text-white mb-5 flex items-center gap-2">
-                  <Cpu size={14} className="text-purple-400" />
-                  Service Status
-                </h3>
-                <div className="space-y-3">
-                  {mockSystemHealth.map((s) => (
-                    <div key={s.label} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                      <div className="flex items-center gap-3">
-                        {s.status === "healthy" ? (
-                          <CheckCircle size={15} className="text-green-400" />
-                        ) : s.status === "warning" ? (
-                          <AlertTriangle size={15} className="text-yellow-400" />
-                        ) : (
-                          <XCircle size={15} className="text-red-400" />
-                        )}
-                        <span className="text-[13px] font-medium text-white">{s.label}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[11px] text-gray-400">{s.latency}</span>
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                          s.status === "healthy" ? "bg-green-500/20 text-green-400" :
-                          s.status === "warning" ? "bg-yellow-500/20 text-yellow-400" :
-                          "bg-red-500/20 text-red-400"
-                        }`}>
-                          {s.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Database stats */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <h3 className="text-sm font-bold text-white mb-5 flex items-center gap-2">
-                  <Database size={14} className="text-cyan-400" />
-                  Database Stats
-                </h3>
-                <div className="space-y-4">
-                  {[
-                    { label: "Total Messages", value: "48,210", bar: 82 },
-                    { label: "Knowledge Chunks", value: "12,440", bar: 45 },
-                    { label: "Vector Embeddings", value: "12,440", bar: 45 },
-                    { label: "Active Conversations", value: "1,820", bar: 31 },
-                    { label: "DB Storage Used", value: "2.4 GB", bar: 24 },
-                  ].map((d) => (
-                    <div key={d.label}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[12px] text-gray-400">{d.label}</span>
-                        <span className="text-[13px] font-bold text-white">{d.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-purple-500 to-cyan-500"
-                          style={{ width: `${d.bar}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </motion.div>
-        )}
-
-        {/* ACTIVITY LOG TAB */}
-        {activeTab === "activity" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="rounded-2xl border border-white/10 overflow-hidden">
-              <div className="border-b border-white/10 bg-white/[0.03] px-5 py-3 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-white">System Activity Log</h3>
-                <button className="flex items-center gap-2 text-[12px] text-gray-400 hover:text-white transition-all">
-                  <Download size={13} />
-                  Export Log
-                </button>
-              </div>
-              <div className="divide-y divide-white/5">
-                {[...mockRecentActivity, ...mockRecentActivity].map((a, i) => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-all">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${
-                      a.type === "success" ? "bg-green-400" :
-                      a.type === "warning" ? "bg-yellow-400" :
-                      a.type === "error" ? "bg-red-400" :
-                      "bg-blue-400"
-                    }`} />
-                    <div className="flex-1">
-                      <p className="text-[13px] text-white">{a.action}</p>
-                      <p className="text-[11px] text-gray-400">{a.target}</p>
-                    </div>
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                      a.type === "success" ? "bg-green-500/20 text-green-400" :
-                      a.type === "warning" ? "bg-yellow-500/20 text-yellow-400" :
-                      a.type === "error" ? "bg-red-500/20 text-red-400" :
-                      "bg-blue-500/20 text-blue-400"
-                    }`}>
-                      {a.type}
-                    </span>
-                    <span className="text-[11px] text-gray-500 w-16 text-right">{a.time}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-      </div>
+        {data && activeTab === "activity" && <ActivityList items={data.recent_activity} title="Platform Activity Log" />}
+      </main>
     </div>
   );
+}
+
+function ActivityList({ items, title }: { items: ActivityItem[]; title: string }) {
+  return <section className="ds-card p-6"><h2 className="mb-4 text-sm font-bold">{title}</h2>
+    <div className="divide-y divide-border">{items.map((item, index) => <div key={`${item.action}-${item.timestamp}-${index}`} className="flex items-center gap-3 py-3">
+      <span className={`h-2 w-2 rounded-full ${item.type === "success" ? "bg-[var(--success)]" : "bg-accent"}`} />
+      <div className="min-w-0 flex-1"><p className="truncate text-sm">{item.action}</p><p className="truncate text-xs text-muted-foreground">{item.target}</p></div>
+      <time className="text-xs text-muted-foreground">{relativeTime(item.timestamp)}</time>
+    </div>)}
+    {!items.length && <p className="text-sm text-muted-foreground">No recent activity.</p>}</div>
+  </section>;
 }

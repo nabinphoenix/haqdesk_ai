@@ -37,7 +37,8 @@ dependencies = [
     "pydantic-settings",
     "requests",
     "fastapi-mail",
-    "litellm"
+    "litellm",
+    "qdrant-client>=1.18.0",
 ]
 
 [dependency-groups]

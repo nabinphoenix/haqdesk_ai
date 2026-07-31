@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 import bcrypt
 from app.models.user import User, UserRole
+from app.models.business import Business
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -50,6 +51,19 @@ def get_or_create_user_by_email(
         db.refresh(user)
         return user
 
+    # A Google sign-up has no business-name field. Create a tenant for the new
+    # business admin instead of leaving them on the invalid business_id=NULL path.
+    base_business_name = f"{name.strip() or email.split('@')[0]}'s Business"
+    business_name = base_business_name
+    suffix = 2
+    while db.query(Business).filter(Business.name == business_name).first():
+        business_name = f"{base_business_name} {suffix}"
+        suffix += 1
+
+    business = Business(name=business_name, email=email)
+    db.add(business)
+    db.flush()
+
     # Create a new user with a random unusable password
     random_password = str(uuid4())
     hashed_password = hash_password(random_password)
@@ -62,8 +76,13 @@ def get_or_create_user_by_email(
         email_verified=True,
         google_id=google_id,
         avatar_url=avatar_url,
+        business_id=business.id,
     )
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.commit()
+        db.refresh(new_user)
+    except Exception:
+        db.rollback()
+        raise
     return new_user

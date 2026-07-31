@@ -18,7 +18,7 @@ from app.services.rag_service import rag_service
 
 from app.models.integration import Integration
 from app.models.user import User
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_business_admin
 from app.core.config import settings
 from app.services.credential_service import encrypt_secret
 
@@ -70,7 +70,7 @@ class EmailIntegrationRequest(BaseModel):
 async def configure_email_integration(
     payload: EmailIntegrationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_business_admin),
 ):
     """Validate and store one business's Gmail app-password connection."""
     if not current_user.business_id:
@@ -135,7 +135,7 @@ PLATFORM_OAUTH_URLS = {
 @router.get("/{platform}/connect")
 async def connect_platform(
     platform: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_business_admin),
 ):
     """
     Step 1: Generate OAuth URL and return it to frontend

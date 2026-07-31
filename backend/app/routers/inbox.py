@@ -22,7 +22,7 @@ from app.core.config import settings
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 messaging_service = MessagingService()
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_business_admin
 
 @router.get("/conversations")
 async def get_conversations(
@@ -332,7 +332,7 @@ async def reply_to_conversation(
 async def delete_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id
@@ -356,7 +356,7 @@ async def delete_conversation(
 async def restore_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id
@@ -468,7 +468,7 @@ async def update_conversation(
         raise HTTPException(status_code=403, detail="Access denied")
 
     allowed_priorities = ["low", "medium", "high", "urgent"]
-    allowed_statuses = ["open", "resolved", "closed"]
+    allowed_statuses = ["open", "pending", "resolved", "closed"]
 
     if payload.priority:
         if payload.priority not in allowed_priorities:
@@ -478,6 +478,11 @@ async def update_conversation(
     if payload.status:
         if payload.status not in allowed_statuses:
             raise HTTPException(status_code=400, detail=f"Status must be one of {allowed_statuses}")
+        if current_user.role not in ("business_admin", "super_admin") and payload.status not in ("open", "pending"):
+            raise HTTPException(
+                status_code=403,
+                detail="Agents may only set conversation status to open or pending",
+            )
         conversation.status = payload.status
 
     db.commit()

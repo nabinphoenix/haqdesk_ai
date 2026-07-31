@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import settings
-from app.routers import auth, integrations, inbox, customers, knowledge, whatsapp, team, analytics, settings as settings_router
+from app.routers import auth, integrations, inbox, customers, knowledge, whatsapp, team, analytics, super_admin, settings as settings_router
 
 import threading
 import time
@@ -60,6 +60,7 @@ app.include_router(knowledge.router, prefix="/api/v1")
 app.include_router(team.router, prefix="/api/v1/team")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
+app.include_router(super_admin.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

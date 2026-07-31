@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_business_admin
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.user import User
 from app.services.rag_service import rag_service
@@ -37,7 +37,7 @@ async def upload_document(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     business_id = current_user.business_id
     if not business_id:
@@ -118,7 +118,7 @@ def list_documents(
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     business_id = current_user.business_id
     if not business_id:
@@ -243,7 +243,7 @@ def update_chunk(
     chunk_id: int,
     payload: ChunkUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     business_id = current_user.business_id
     if not business_id:

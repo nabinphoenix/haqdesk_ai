@@ -34,6 +34,16 @@
   --accent: #6D4AE2;
   --accent-glow: #818CF8;
   --success: #10B981;
+  --success-foreground: #047857;
+  --success-surface: rgba(16, 185, 129, 0.10);
+  --success-border: rgba(16, 185, 129, 0.28);
+  --error: #DC2626;
+  --error-foreground: #B91C1C;
+  --error-surface: rgba(239, 68, 68, 0.10);
+  --error-border: rgba(239, 68, 68, 0.28);
+  --warning: #D97706;
+  --warning-surface: rgba(245, 158, 11, 0.10);
+  --warning-border: rgba(245, 158, 11, 0.28);
   
   --nav-bg: rgba(248, 250, 252, 0.85);
   --nav-border: rgba(15, 14, 12, 0.10);
@@ -43,8 +53,28 @@
   
   --card-bg: #ffffff;
   --card-shadow: 0 2px 12px rgba(15, 14, 12, 0.07), 0 0 0 0.5px rgba(15, 14, 12, 0.10);
+  --shadow-card: var(--card-shadow);
+  --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.22);
   
   --input-bg: #F1F5F9;
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+  --radius-shell: 1.5rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --text-label-size: 0.6875rem;
+  --text-label-line: 1rem;
+  --text-body-size: 0.875rem;
+  --text-body-line: 1.375rem;
+  --text-caption-size: 0.75rem;
+  --text-caption-line: 1.125rem;
   font-family: var(--font-jakarta), sans-serif;
 }
 
@@ -58,6 +88,16 @@
   --accent: #6D4AE2;
   --accent-glow: #818CF8;
   --success: #10B981;
+  --success-foreground: #6EE7B7;
+  --success-surface: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.30);
+  --error: #EF4444;
+  --error-foreground: #F87171;
+  --error-surface: rgba(239, 68, 68, 0.12);
+  --error-border: rgba(239, 68, 68, 0.30);
+  --warning: #F59E0B;
+  --warning-surface: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.30);
   
   --nav-bg: rgba(13, 12, 11, 0.88);
   --nav-border: rgba(240, 237, 232, 0.08);
@@ -67,6 +107,8 @@
   
   --card-bg: #1a1916;
   --card-shadow: 0 2px 24px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(240, 237, 232, 0.10);
+  --shadow-card: var(--card-shadow);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.48);
   
   --input-bg: #1E293B;
 }
@@ -259,4 +301,72 @@ textarea::placeholder {
 select option {
   background-color: var(--surface);
   color: var(--text-primary);
+}
+
+/* Phase 1 design-system primitives */
+.ds-label {
+  display: block;
+  color: var(--text-secondary);
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: var(--text-label-size);
+  font-weight: 700;
+  line-height: var(--text-label-line);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ds-input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.ds-input:focus {
+  border-color: var(--accent-glow) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.ds-input[aria-invalid="true"] {
+  border-color: var(--error) !important;
+  box-shadow: 0 0 0 3px var(--error-surface);
+}
+
+.ds-input[data-valid="true"] {
+  border-color: var(--success) !important;
+}
+
+.ds-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.6875rem 1rem;
+  border-radius: var(--radius-control);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.ds-button:active:not(:disabled) { transform: scale(0.98); }
+.ds-button:disabled { cursor: not-allowed; opacity: 0.6; }
+.ds-button-primary { background: var(--accent); color: #fff; }
+.ds-button-primary:hover:not(:disabled) { background: #5B3BC7; }
+.ds-button-secondary { border: 1px solid var(--border); background: var(--surface-wash); color: var(--text-primary); }
+.ds-button-danger { background: var(--error); color: #fff; }
+
+.ds-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }

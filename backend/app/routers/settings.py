@@ -5,7 +5,7 @@ from typing import Optional
 from app.core.database import get_db
 from app.models.user import User
 from app.models.business import Business
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_business_admin
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -47,7 +47,7 @@ async def get_business_settings(
 async def update_business_settings(
     payload: BusinessUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_business_admin)
 ):
     if not current_user.business_id:
         raise HTTPException(status_code=403, detail="No business associated")

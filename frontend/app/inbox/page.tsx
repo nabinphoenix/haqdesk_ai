@@ -129,6 +129,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export default function InboxPage() {
     const router = useRouter();
     const [isAuth, setIsAuth] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const isAdmin = userRole === "business_admin" || userRole === "super_admin";
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformKey>("all");
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
@@ -278,6 +280,7 @@ export default function InboxPage() {
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) { router.push("/login"); return; }
+        setUserRole(localStorage.getItem("userRole"));
         setIsAuth(true);
         fetchConversations();
         fetchAiMode();
@@ -398,12 +401,13 @@ export default function InboxPage() {
             <ConfirmModal
                 isOpen={confirmDeleteId !== null}
                 title="Delete Conversation"
-                message="This conversation and all its messages will be permanently deleted. This action cannot be undone."
+                message="This conversation will be moved to Deleted. You can restore it anytime from the Deleted tab."
                 confirmLabel={isDeleting ? "Deleting…" : "Delete"}
                 cancelLabel="Cancel"
                 onConfirm={executeDeleteConversation}
                 onCancel={() => setConfirmDeleteId(null)}
                 isDangerous={true}
+                isPending={isDeleting}
             />
 
             {/* ── COL 1: Platform icon rail ─────────────────────────────────── */}
@@ -560,13 +564,15 @@ export default function InboxPage() {
                                         </div>
 
                                         {/* Restore button */}
-                                        <button
-                                            onClick={() => handleRestoreConversation(conv.id)}
-                                            className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold hover:bg-purple-500/30 transition-all cursor-pointer"
-                                        >
-                                            <RefreshCw size={11} />
-                                            Restore
-                                        </button>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={() => handleRestoreConversation(conv.id)}
+                                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold hover:bg-purple-500/30 transition-all cursor-pointer"
+                                            >
+                                                <RefreshCw size={11} />
+                                                Restore
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             )}
@@ -684,13 +690,15 @@ export default function InboxPage() {
                                             </select>
 
                                             {/* Delete button */}
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
-                                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                                                title="Delete conversation"
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    title="Delete conversation"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 );

@@ -185,6 +185,9 @@ export default function AppNavbar() {
               if (item.name === "Super Admin") {
                 return userRole === "super_admin";
               }
+              if (item.name === "Settings") {
+                return userRole === "business_admin" || userRole === "super_admin";
+              }
               return true;
             })
             .map((item) => {
@@ -334,6 +337,9 @@ export default function AppNavbar() {
               .filter(item => {
                 if (item.name === "Super Admin") {
                   return userRole === "super_admin";
+                }
+                if (item.name === "Settings") {
+                  return userRole === "business_admin" || userRole === "super_admin";
                 }
                 return true;
               })

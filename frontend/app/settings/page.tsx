@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Save, Building2, Link2, Bell, Shield, CheckCircle2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithAuth } from "@/lib/api";
+import PasswordField from "@/components/ui/PasswordField";
+import { useRouter } from "next/navigation";
 
 const tabs = [
   { id: "business", label: "Business Profile", icon: Building2 },
@@ -14,6 +16,7 @@ const tabs = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("business");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -40,6 +43,14 @@ export default function SettingsPage() {
     ai_draft: false,
     agent_assigned: true,
   });
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole");
+    if (role && role !== "business_admin" && role !== "super_admin") {
+      toast.error("Administrator access required");
+      router.replace("/inbox");
+    }
+  }, [router]);
 
   // Load business settings
   useEffect(() => {
@@ -405,12 +416,12 @@ export default function SettingsPage() {
                         placeholder="support@yourbusiness.com"
                         className="w-full px-4 py-3 rounded-xl border border-surface-border bg-white/5 text-sm text-foreground outline-none"
                       />
-                      <input
-                        type="password"
+                      <PasswordField
+                        id="settings-email-app-password"
+                        label="Google App Password"
                         value={emailSetup.app_password}
                         onChange={event => setEmailSetup(prev => ({ ...prev, app_password: event.target.value }))}
                         placeholder="16-character Google App Password"
-                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-white/5 text-sm text-foreground outline-none"
                       />
                       <div className="flex gap-3">
                         <button
@@ -467,18 +478,9 @@ export default function SettingsPage() {
               {activeTab === "security" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground mb-6">Security</h2>
-                  <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Current Password</label>
-                    <input type="password" className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 outline-none transition-all" placeholder="••••••••" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">New Password</label>
-                    <input type="password" className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 outline-none transition-all" placeholder="••••••••" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Confirm New Password</label>
-                    <input type="password" className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 outline-none transition-all" placeholder="••••••••" />
-                  </div>
+                  <PasswordField id="settings-current-password" label="Current Password" placeholder="••••••••" />
+                  <PasswordField id="settings-new-password" label="New Password" placeholder="••••••••" />
+                  <PasswordField id="settings-confirm-password" label="Confirm New Password" placeholder="••••••••" />
                   <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow">
                     <Shield size={14} />
                     Update Password

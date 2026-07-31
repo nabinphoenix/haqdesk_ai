@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, X } from "lucide-react";
 
@@ -13,6 +13,7 @@ interface ConfirmModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     isDangerous?: boolean;
+    isPending?: boolean;
 }
 
 export default function ConfirmModal({
@@ -24,15 +25,52 @@ export default function ConfirmModal({
     onConfirm,
     onCancel,
     isDangerous = true,
+    isPending = false,
 }: ConfirmModalProps) {
-    // Close on Escape key
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+    const titleId = useId();
+    const descriptionId = useId();
+
     useEffect(() => {
+        if (!isOpen) return;
+        const previousFocus = document.activeElement as HTMLElement | null;
+        cancelButtonRef.current?.focus();
+
         const handler = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && isOpen) onCancel();
+            if (e.key === "Escape" && !isPending) {
+                e.preventDefault();
+                onCancel();
+                return;
+            }
+            if (e.key !== "Tab" || !dialogRef.current) return;
+
+            const focusable = Array.from(
+                dialogRef.current.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                )
+            );
+            if (!focusable.length) {
+                e.preventDefault();
+                dialogRef.current.focus();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
         };
         document.addEventListener("keydown", handler);
-        return () => document.removeEventListener("keydown", handler);
-    }, [isOpen, onCancel]);
+        return () => {
+            document.removeEventListener("keydown", handler);
+            previousFocus?.focus();
+        };
+    }, [isOpen, isPending, onCancel]);
 
     return (
         <AnimatePresence>
@@ -44,9 +82,16 @@ export default function ConfirmModal({
                     transition={{ duration: 0.18 }}
                     className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
                     style={{ background: "rgba(9, 5, 20, 0.75)", backdropFilter: "blur(8px)" }}
-                    onClick={onCancel}
+                    onClick={() => { if (!isPending) onCancel(); }}
                 >
                     <motion.div
+                        ref={dialogRef}
+                        role="alertdialog"
+                        aria-modal="true"
+                        aria-labelledby={titleId}
+                        aria-describedby={descriptionId}
+                        aria-busy={isPending}
+                        tabIndex={-1}
                         initial={{ opacity: 0, scale: 0.92, y: 16 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -87,10 +132,12 @@ export default function ConfirmModal({
                                             style={{ color: isDangerous ? "#EF4444" : "#6D4AE2" }}
                                         />
                                     </div>
-                                    <h3 className="text-[15px] font-bold text-white tracking-tight">{title}</h3>
+                                    <h3 id={titleId} className="text-[15px] font-bold text-white tracking-tight">{title}</h3>
                                 </div>
                                 <button
                                     onClick={onCancel}
+                                    disabled={isPending}
+                                    aria-label="Close confirmation dialog"
                                     className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-all shrink-0 ml-2"
                                 >
                                     <X size={14} />
@@ -98,7 +145,7 @@ export default function ConfirmModal({
                             </div>
 
                             {/* Message */}
-                            <p className="text-[13px] text-gray-400 leading-relaxed pl-[52px]">
+                            <p id={descriptionId} className="text-[13px] text-gray-400 leading-relaxed pl-[52px]">
                                 {message}
                             </p>
 
@@ -108,13 +155,16 @@ export default function ConfirmModal({
                             {/* Buttons */}
                             <div className="flex items-center gap-3 justify-end">
                                 <button
+                                    ref={cancelButtonRef}
                                     onClick={onCancel}
+                                    disabled={isPending}
                                     className="px-4 py-2 rounded-xl text-[12px] font-semibold text-gray-300 hover:text-white hover:bg-white/10 transition-all border border-white/10"
                                 >
                                     {cancelLabel}
                                 </button>
                                 <button
                                     onClick={onConfirm}
+                                    disabled={isPending}
                                     className="px-5 py-2 rounded-xl text-[12px] font-bold text-white transition-all active:scale-95"
                                     style={{
                                         background: isDangerous
