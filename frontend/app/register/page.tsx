@@ -8,6 +8,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import FormField from "@/components/ui/FormField";
 import PasswordField from "@/components/ui/PasswordField";
 import ValidationMessage from "@/components/ui/ValidationMessage";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -99,7 +100,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-background bg-mesh-gradient px-6 py-16 font-body antialiased">
+    <div className="min-h-screen overflow-y-auto bg-background bg-mesh-gradient px-6 py-16 font-body antialiased sm:px-10 lg:px-14">
+      <ThemeToggle className="fixed right-6 top-6 z-30 sm:right-10" />
       <div className="fixed left-1/4 top-1/4 -z-10 h-[400px] w-[400px] rounded-full bg-[#6D4AE208] blur-[100px]" />
       <div className="fixed bottom-1/4 right-1/4 -z-10 h-[400px] w-[400px] rounded-full bg-[#06B6D408] blur-[100px]" />
 
@@ -272,11 +274,11 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="ds-button ds-button-primary mt-6 w-full uppercase tracking-[0.14em] shadow-xl shadow-[#6D4AE2]/20"
+            className="ds-button ds-button-primary mt-6 w-full uppercase tracking-[0.14em] shadow-xl shadow-lg"
           >
             {loading ? (
               <>
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-on-accent border-t-transparent" />
                 Creating account…
               </>
             ) : (

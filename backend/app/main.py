@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import settings
-from app.routers import auth, integrations, inbox, customers, knowledge, whatsapp, team, analytics, super_admin, settings as settings_router
+from app.routers import auth, integrations, inbox, customers, knowledge, whatsapp, team, analytics, super_admin, internal_messages, settings as settings_router
 
 import threading
 import time
@@ -10,6 +10,8 @@ from app.services.email_poller import run_email_poll
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from app.core.database import engine
 import os
 
 app = FastAPI(title="HaqDesk AI API")
@@ -39,7 +41,11 @@ def start_email_polling():
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    # Keep the configured frontend URL for deployed environments.  During local
+    # development Next.js may select another port when 3000 is already in use,
+    # so allow localhost/127.0.0.1 on any port as well.
+    allow_origins=[settings.FRONTEND_URL.rstrip("/")],
+    allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +67,7 @@ app.include_router(team.router, prefix="/api/v1/team")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(super_admin.router, prefix="/api/v1")
+app.include_router(internal_messages.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
@@ -73,6 +80,18 @@ async def health_preflight():
 
 @app.on_event("startup")
 async def startup_event():
+    # Keep local/development databases compatible without requiring a full
+    # migration framework. Presence uses this timestamp to expire stale users.
+    with engine.begin() as connection:
+        connection.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE"
+        ))
+        connection.execute(text(
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS storage_path VARCHAR"
+        ))
+    from app.models.internal_messaging import InternalThread, InternalThreadParticipant, InternalMessage
+    from app.core.database import Base
+    Base.metadata.create_all(bind=engine, tables=[InternalThread.__table__, InternalThreadParticipant.__table__, InternalMessage.__table__])
     start_email_polling()
 
 if __name__ == "__main__":

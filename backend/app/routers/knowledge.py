@@ -1,5 +1,5 @@
 import re
-import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
+from app.core.config import settings
 from app.core.dependencies import get_current_user, require_business_admin
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.user import User
@@ -15,11 +16,21 @@ from app.services.rag_service import rag_service
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
-def run_ingestion_with_new_session(tmp_path, filename, document_id, business_id):
+def knowledge_storage_path(
+    business_id: int, document_id: int, safe_filename: str
+) -> Path:
+    """Derive a business-scoped path without accepting a caller path."""
+    if business_id <= 0 or document_id <= 0:
+        raise ValueError("Positive business and document IDs are required")
+    root = Path(settings.KNOWLEDGE_UPLOAD_ROOT)
+    return root / str(business_id) / f"{document_id}_{safe_filename}"
+
+
+def run_ingestion_with_new_session(file_path, filename, document_id, business_id):
     db = SessionLocal()
     try:
         rag_service.ingest_document(
-            file_path=tmp_path,
+            file_path=file_path,
             filename=filename,
             document_id=document_id,
             business_id=business_id,
@@ -67,13 +78,22 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
-    tmp.write(file_bytes)
-    tmp.close()
+    file_path = knowledge_storage_path(business_id, doc.id, safe_filename)
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(file_bytes)
+        doc.storage_path = file_path.as_posix()
+        db.commit()
+    except Exception as exc:
+        db.delete(doc)
+        db.commit()
+        raise HTTPException(
+            status_code=500, detail="Could not persist the uploaded document"
+        ) from exc
 
     background_tasks.add_task(
         run_ingestion_with_new_session,
-        tmp.name,
+        str(file_path),
         safe_filename,
         doc.id,
         business_id
@@ -129,7 +149,18 @@ def delete_document(
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
-    rag_service.delete_document_chunks(document_id, db)
+    rag_service.delete_document_chunks(document_id, business_id, db)
+    if doc.storage_path:
+        stored_file = Path(doc.storage_path)
+        expected_parent = knowledge_storage_path(
+            business_id, document_id, doc.filename
+        ).parent.resolve()
+        try:
+            resolved_file = stored_file.resolve()
+            if resolved_file.parent == expected_parent and resolved_file.exists():
+                resolved_file.unlink()
+        except OSError:
+            pass
     db.delete(doc)
     db.commit()
     return {"message": "Document deleted successfully."}
@@ -258,7 +289,9 @@ def update_chunk(
         raise HTTPException(status_code=404, detail="Chunk not found")
 
     try:
-        rag_service.update_chunk_embedding(chunk_id, payload.content, db)
+        rag_service.update_chunk_embedding(
+            chunk_id, payload.content, business_id, db
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update chunk: {e}")
 

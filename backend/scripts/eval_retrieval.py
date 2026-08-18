@@ -109,7 +109,7 @@ EXPANDED_EVAL_DATASET = [
 def eval_query(query_str: str, business_id: int = 1, top_k: int = 3):
     """Retrieve top_k chunks for query using get_embedding_input() + Qdrant search."""
     search_text = get_embedding_input(query_str)
-    embedding = rag_service.embedder.encode(search_text).tolist()
+    embedding = rag_service.embedder.encode(f"query: {search_text}").tolist()
 
     from qdrant_client.models import Filter, FieldCondition, MatchValue
     query_filter = Filter(

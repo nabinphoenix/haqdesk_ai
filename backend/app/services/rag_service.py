@@ -21,26 +21,28 @@ from app.services.llm_gateway import llm_gateway
 
 logger = logging.getLogger("uvicorn")
 
-# BAAI/bge-m3 produces 1024-dimensional embeddings
-EMBEDDING_DIM = 1024
+# Embedding dimension — must match the model configured in settings
+EMBEDDING_DIM = settings.EMBEDDING_DIM
 CONFIDENCE_THRESHOLD = 0.45
 
 
 class RAGService:
     """
-    RAG Service with BAAI/bge-m3 Multilingual Embedding & Qdrant Vector Store.
+    RAG Service with multilingual embedding (intfloat/multilingual-e5-small by default)
+    & Qdrant Vector Store.
     """
     def __init__(self):
         self._embedder = None
         self._qdrant = None
-        self._collection_initialized = False
+        self._initialized_collections = set()
 
     @property
     def embedder(self):
         if self._embedder is None:
-            logger.info("[RAG] Loading BAAI/bge-m3 embedding model...")
-            self._embedder = SentenceTransformer("BAAI/bge-m3")
-            logger.info("[RAG] BAAI/bge-m3 Embedding model loaded successfully.")
+            model_name = settings.EMBEDDING_MODEL
+            logger.info("[RAG] Loading %s embedding model...", model_name)
+            self._embedder = SentenceTransformer(model_name)
+            logger.info("[RAG] %s embedding model loaded successfully.", model_name)
         return self._embedder
 
     @property
@@ -60,63 +62,73 @@ class RAGService:
                 logger.warning(f"[RAG] Remote Qdrant server ({settings.QDRANT_HOST}:{settings.QDRANT_PORT}) unavailable: {e}. Falling back to embedded Qdrant (path='./qdrant_storage')...")
                 self._qdrant = QdrantClient(path="./qdrant_storage")
             
-            self._ensure_collection()
         return self._qdrant
 
-    def _ensure_collection(self):
-        """Create or recreate collection if dimension mismatches 1024 (BAAI/bge-m3)."""
-        if self._collection_initialized:
-            return
-        try:
-            collections = [c.name for c in self._qdrant.get_collections().collections]
-            
-            # Clean up old legacy collections (384-dim) if they exist
-            for old_name in ["haqdesk_knowledge", "techsuru_knowledge"]:
-                if old_name in collections and old_name != settings.QDRANT_COLLECTION_NAME:
-                    try:
-                        info = self._qdrant.get_collection(collection_name=old_name)
-                        current_size = info.config.params.vectors.size if hasattr(info.config.params.vectors, 'size') else None
-                        if current_size != EMBEDDING_DIM:
-                            logger.info(f"[RAG] Deleting legacy Qdrant collection '{old_name}'...")
-                            self._qdrant.delete_collection(collection_name=old_name)
-                    except Exception as e:
-                        logger.warning(f"[RAG] Could not delete old collection {old_name}: {e}")
+    @staticmethod
+    def collection_name_for_business(business_id: int) -> str:
+        """Derive the only allowed Qdrant collection name for a tenant."""
+        if not isinstance(business_id, int) or isinstance(business_id, bool) or business_id <= 0:
+            raise ValueError("A positive integer business_id is required")
+        prefix = settings.QDRANT_COLLECTION_PREFIX.strip().strip("_")
+        if not prefix:
+            raise ValueError("QDRANT_COLLECTION_PREFIX cannot be blank")
+        return f"{prefix}_{business_id}"
 
-            recreate = False
-            if settings.QDRANT_COLLECTION_NAME in collections:
-                info = self._qdrant.get_collection(collection_name=settings.QDRANT_COLLECTION_NAME)
-                current_size = info.config.params.vectors.size if hasattr(info.config.params.vectors, 'size') else None
-                if current_size != EMBEDDING_DIM:
-                    logger.warning(
-                        f"[RAG] Qdrant collection vector size mismatch ({current_size} != {EMBEDDING_DIM}). "
-                        f"Recreating collection '{settings.QDRANT_COLLECTION_NAME}' for BAAI/bge-m3..."
-                    )
-                    self._qdrant.delete_collection(collection_name=settings.QDRANT_COLLECTION_NAME)
-                    recreate = True
+    def _collection_exists(self, business_id: int) -> bool:
+        collection_name = self.collection_name_for_business(business_id)
+        if collection_name in self._initialized_collections:
+            return True
+        exists = self.qdrant.collection_exists(collection_name=collection_name)
+        if exists:
+            self._initialized_collections.add(collection_name)
+        return exists
 
-            if settings.QDRANT_COLLECTION_NAME not in collections or recreate:
-                self._qdrant.create_collection(
-                    collection_name=settings.QDRANT_COLLECTION_NAME,
-                    vectors_config=VectorParams(
-                        size=EMBEDDING_DIM,
-                        distance=Distance.COSINE
-                    )
-                )
-                logger.info(f"[RAG] Initialized 1024-dim Qdrant collection '{settings.QDRANT_COLLECTION_NAME}' (BAAI/bge-m3)")
-            else:
-                logger.info(f"[RAG] Qdrant collection '{settings.QDRANT_COLLECTION_NAME}' ready (dim={EMBEDDING_DIM})")
-            self._collection_initialized = True
-        except Exception as e:
-            logger.error(f"[RAG] Failed to initialize Qdrant collection: {e}")
+    def _ensure_business_collection(self, business_id: int) -> str:
+        """Lazily create one non-destructive collection for a business."""
+        collection_name = self.collection_name_for_business(business_id)
+        if not self._collection_exists(business_id):
+            self.qdrant.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(
+                    size=EMBEDDING_DIM,
+                    distance=Distance.COSINE,
+                ),
+            )
+            logger.info("[RAG] Created business collection '%s'", collection_name)
 
-    def embed_text(self, text: str) -> list[float]:
-        """Embed a single text using BAAI/bge-m3 after Romanized Nepali normalization."""
+        info = self.qdrant.get_collection(collection_name=collection_name)
+        vectors = info.config.params.vectors
+        current_size = vectors.size if hasattr(vectors, "size") else None
+        if current_size != EMBEDDING_DIM:
+            raise RuntimeError(
+                f"Qdrant collection '{collection_name}' has vector size "
+                f"{current_size}; expected {EMBEDDING_DIM}. Refusing destructive recreation."
+            )
+        self._initialized_collections.add(collection_name)
+        return collection_name
+
+    def embed_text(self, text: str, prefix: str = "query: ") -> list[float]:
+        """Embed a single text after Romanized Nepali normalization.
+
+        Args:
+            text: Raw input text.
+            prefix: E5-family models require a task prefix.
+                    Use "query: " for search queries (default),
+                    "passage: " for document chunks during ingestion.
+        """
         normalized_input = get_embedding_input(text)
-        return self.embedder.encode(normalized_input).tolist()
+        return self.embedder.encode(f"{prefix}{normalized_input}").tolist()
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Embed multiple texts using BAAI/bge-m3 after Romanized Nepali normalization."""
-        normalized_inputs = [get_embedding_input(t) for t in texts]
+    def embed_batch(self, texts: list[str], prefix: str = "passage: ") -> list[list[float]]:
+        """Embed multiple texts after Romanized Nepali normalization.
+
+        Args:
+            texts: List of raw input texts.
+            prefix: E5-family models require a task prefix.
+                    Use "passage: " for document chunks (default),
+                    "query: " for batch search queries.
+        """
+        normalized_inputs = [f"{prefix}{get_embedding_input(t)}" for t in texts]
         return self.embedder.encode(normalized_inputs).tolist()
 
     def detect_language(self, text: str) -> str:
@@ -249,8 +261,9 @@ class RAGService:
             db.commit()
 
             # Batch upsert to Qdrant
+            collection_name = self._ensure_business_collection(business_id)
             self.qdrant.upsert(
-                collection_name=settings.QDRANT_COLLECTION_NAME,
+                collection_name=collection_name,
                 points=qdrant_points
             )
 
@@ -262,14 +275,6 @@ class RAGService:
             logger.error(f"[RAG] Document ingestion failed: {e}")
             raise e
 
-        finally:
-            import os
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-
     def retrieve_chunks(
         self,
         query_text: str,
@@ -278,6 +283,10 @@ class RAGService:
     ) -> list[dict]:
         """Search Qdrant for top_k relevant chunks for a business."""
         try:
+            if not self._collection_exists(business_id):
+                logger.info("[RAG] No knowledge collection exists for business %s", business_id)
+                return []
+            collection_name = self.collection_name_for_business(business_id)
             query_embedding = self.embed_text(query_text)
 
             query_filter = Filter(
@@ -291,7 +300,7 @@ class RAGService:
 
             if hasattr(self.qdrant, 'search'):
                 results = self.qdrant.search(
-                    collection_name=settings.QDRANT_COLLECTION_NAME,
+                    collection_name=collection_name,
                     query_vector=query_embedding,
                     query_filter=query_filter,
                     limit=top_k,
@@ -299,7 +308,7 @@ class RAGService:
                 )
             else:
                 response = self.qdrant.query_points(
-                    collection_name=settings.QDRANT_COLLECTION_NAME,
+                    collection_name=collection_name,
                     query=query_embedding,
                     query_filter=query_filter,
                     limit=top_k,
@@ -342,15 +351,16 @@ class RAGService:
     ) -> Optional[dict]:
         """Full RAG pipeline: retrieve → generate → return answer with context memory."""
         start_time = time.time()
+        resolved_business_name = (business_name or "").strip()
 
         try:
             detected_lang = language or self.detect_language(question)
-            if not business_name and db:
+            if not resolved_business_name and db:
                 business = db.query(Business).filter(
                     Business.id == business_id
                 ).first()
-                business_name = business.name if business else None
-            business_name = business_name or "the business"
+                resolved_business_name = (business.name or "").strip() if business else ""
+            resolved_business_name = resolved_business_name or "Support Team"
 
             # 1. Retrieve relevant chunks
             chunks = self.retrieve_chunks(question, business_id, top_k)
@@ -383,7 +393,7 @@ class RAGService:
                 sentiment=sentiment,
                 platform=platform,
                 customer_name=customer_name,
-                business_name=business_name,
+                business_name=resolved_business_name,
             )
 
             # 3. Retrieve conversation history with current_message_id exclusion (Fix 1)
@@ -439,7 +449,26 @@ class RAGService:
             import traceback
             logger.error(f"[RAG] Query failed:\n{traceback.format_exc()}")
             lang = language or "english"
-            fallback_answer = "Hajur! TechSuru support ma swagat xa. Tapailai laptop, mobile, accessories, kinne wa repair garne sambandhi k jankari chainchha?" if lang == "romanized_nepali" else "Hello! Welcome to TechSuru support. How can we help you today with our laptops, electronics, or repair services?"
+            if not resolved_business_name and db:
+                try:
+                    business = db.query(Business).filter(
+                        Business.id == business_id
+                    ).first()
+                    resolved_business_name = (
+                        (business.name or "").strip() if business else ""
+                    )
+                except Exception:
+                    resolved_business_name = ""
+            resolved_business_name = resolved_business_name or "Support Team"
+            fallback_answer = (
+                f"Namaste! {resolved_business_name} support ma swagat cha. "
+                "Ahile tapai ko request process garna samasya bhairako cha. "
+                "Hamro team ko sadasya le chhittai follow up garnuhunecha."
+                if lang == "romanized_nepali"
+                else f"Hello! Welcome to {resolved_business_name} support. "
+                "We're having trouble processing your request. "
+                "A team member will follow up shortly."
+            )
             return {
                 "answer": fallback_answer,
                 "confidence": 0.5,
@@ -449,19 +478,20 @@ class RAGService:
                 "metadata": {"fallback_used": True, "error": str(e)}
             }
 
-    def delete_document_chunks(self, document_id: int, db: Session):
+    def delete_document_chunks(self, document_id: int, business_id: int, db: Session):
         """Delete all chunks for a document from both Qdrant and PostgreSQL."""
         chunks = db.query(KnowledgeChunk).filter(
-            KnowledgeChunk.document_id == document_id
+            KnowledgeChunk.document_id == document_id,
+            KnowledgeChunk.business_id == business_id,
         ).all()
 
         chunk_ids = [c.id for c in chunks]
 
-        if chunk_ids:
+        if chunk_ids and self._collection_exists(business_id):
             try:
                 from qdrant_client.models import PointIdsList
                 self.qdrant.delete(
-                    collection_name=settings.QDRANT_COLLECTION_NAME,
+                    collection_name=self.collection_name_for_business(business_id),
                     points_selector=PointIdsList(points=chunk_ids)
                 )
                 logger.info(f"[RAG] Deleted {len(chunk_ids)} points from Qdrant")
@@ -469,25 +499,32 @@ class RAGService:
                 logger.error(f"[RAG] Failed to delete from Qdrant: {e}")
 
         db.query(KnowledgeChunk).filter(
-            KnowledgeChunk.document_id == document_id
+            KnowledgeChunk.document_id == document_id,
+            KnowledgeChunk.business_id == business_id,
         ).delete()
         db.commit()
 
-    def update_chunk_embedding(self, chunk_id: int, new_content: str, db: Session):
+    def update_chunk_embedding(
+        self, chunk_id: int, new_content: str, business_id: int, db: Session
+    ):
         """Re-embed and update a single chunk in Qdrant and update content in PostgreSQL."""
-        chunk = db.query(KnowledgeChunk).filter(KnowledgeChunk.id == chunk_id).first()
+        chunk = db.query(KnowledgeChunk).filter(
+            KnowledgeChunk.id == chunk_id,
+            KnowledgeChunk.business_id == business_id,
+        ).first()
         if not chunk:
             raise ValueError(f"Chunk {chunk_id} not found")
 
-        new_embedding = self.embed_text(new_content)
+        new_embedding = self.embed_text(new_content, prefix="passage: ")
 
         # Update PostgreSQL content
         chunk.content = new_content
         db.commit()
 
         # Update Qdrant (sole vector store)
+        collection_name = self._ensure_business_collection(business_id)
         self.qdrant.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
+            collection_name=collection_name,
             points=[
                 PointStruct(
                     id=chunk_id,

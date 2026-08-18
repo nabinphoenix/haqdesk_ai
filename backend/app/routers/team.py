@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 from app.models.invitation import Invitation
 from app.models.business import Business
+from app.models.conversation import Conversation
+from app.models.message import Message
 from app.auth.utils import hash_password, pwd_context
 from app.core.dependencies import get_current_user, require_business_admin
 
@@ -420,18 +422,133 @@ async def list_members(
         .all()
     )
 
+    online_cutoff = datetime.now(timezone.utc) - timedelta(seconds=90)
+
+    def member_status(member):
+        last_seen = member.last_seen_at
+        if last_seen and last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        return "online" if last_seen and last_seen >= online_cutoff else "offline"
+
     return [
         {
             "id": m.id,
             "name": m.name,
             "email": m.email,
             "role": m.role,
-            "status": m.status or "offline",
+            "status": member_status(m),
+            "last_seen_at": m.last_seen_at.isoformat() if m.last_seen_at else None,
             "created_at": m.created_at.isoformat() if m.created_at else None,
             "avatar_url": m.avatar_url,
         }
         for m in members
     ]
+
+
+@router.get("/metrics")
+async def team_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return live presence and response-performance data for the team page."""
+    if not current_user.business_id:
+        return {"members": [], "summary": {}}
+
+    now = datetime.now(timezone.utc)
+    online_cutoff = now - timedelta(seconds=90)
+    members = db.query(User).filter(
+        User.business_id == current_user.business_id
+    ).order_by(User.created_at.asc()).all()
+    conversations = db.query(Conversation).filter(
+        Conversation.business_id == current_user.business_id
+    ).all()
+    conversation_ids = [conversation.id for conversation in conversations]
+    messages = (
+        db.query(Message)
+        .filter(Message.conversation_id.in_(conversation_ids))
+        .order_by(Message.conversation_id.asc(), Message.timestamp.asc(), Message.id.asc())
+        .all()
+        if conversation_ids else []
+    )
+
+    assigned_counts = {member.id: 0 for member in members}
+    for conversation in conversations:
+        if conversation.assigned_agent_id in assigned_counts:
+            assigned_counts[conversation.assigned_agent_id] += 1
+
+    response_times = []
+    auto_times = []
+    review_times = []
+    member_times = {member.id: [] for member in members}
+    pending_customer_at = {}
+
+    for message in messages:
+        if message.sender_type == "customer":
+            pending_customer_at.setdefault(message.conversation_id, message.timestamp)
+            continue
+        if message.sender_type != "agent" or message.conversation_id not in pending_customer_at:
+            continue
+
+        customer_at = pending_customer_at.pop(message.conversation_id)
+        if not customer_at or not message.timestamp:
+            continue
+        seconds = max(0.0, (message.timestamp - customer_at).total_seconds())
+        response_times.append(seconds)
+
+        metadata = message.ai_metadata if isinstance(message.ai_metadata, dict) else {}
+        response_mode = metadata.get("response_mode")
+        if response_mode == "auto" or (not response_mode and message.sender_id is None):
+            auto_times.append(seconds)
+        else:
+            review_times.append(seconds)
+            if message.sender_id in member_times:
+                member_times[message.sender_id].append(seconds)
+
+    def average(values):
+        return round(sum(values) / len(values), 1) if values else None
+
+    member_payload = []
+    for member in members:
+        last_seen = member.last_seen_at
+        if last_seen and last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        is_online = bool(last_seen and last_seen >= online_cutoff)
+        member_payload.append({
+            "id": member.id,
+            "name": member.name,
+            "email": member.email,
+            "role": member.role,
+            "status": "online" if is_online else "offline",
+            "last_seen_at": last_seen.isoformat() if last_seen else None,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
+            "avatar_url": member.avatar_url,
+            "conversations": assigned_counts.get(member.id, 0),
+            "avg_response_seconds": average(member_times.get(member.id, [])),
+            "responses": len(member_times.get(member.id, [])),
+        })
+
+    business = db.query(Business).filter(Business.id == current_user.business_id).first()
+    return {
+        "members": member_payload,
+        "summary": {
+            "total_members": len(members),
+            "online_members": sum(1 for member in member_payload if member["status"] == "online"),
+            "avg_response_seconds": average(response_times),
+            "auto_avg_response_seconds": average(auto_times),
+            "review_avg_response_seconds": average(review_times),
+            "responses_measured": len(response_times),
+            "auto_responses": len(auto_times),
+            "review_responses": len(review_times),
+            "ai_drafts_used": sum(
+                1 for message in messages
+                if message.sender_type == "agent"
+                and isinstance(message.ai_metadata, dict)
+                and message.ai_metadata.get("ai_assisted") is True
+            ),
+            "ai_response_mode": business.ai_response_mode if business else "review",
+            "roles_active": len({member.role for member in members}),
+        },
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

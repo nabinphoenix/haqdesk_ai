@@ -39,8 +39,9 @@ def get_or_create_user_by_email(
     * email_verified = True
     * optional google_id and avatar_url
     """
+    normalized_email = email.strip().lower()
     # Try to find existing user
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == normalized_email).first()
     if user:
         # Update Google fields if they were not set previously
         if google_id and not user.google_id:
@@ -53,25 +54,27 @@ def get_or_create_user_by_email(
 
     # A Google sign-up has no business-name field. Create a tenant for the new
     # business admin instead of leaving them on the invalid business_id=NULL path.
-    base_business_name = f"{name.strip() or email.split('@')[0]}'s Business"
+    display_name = name.strip() if name and name.strip() else normalized_email.split('@')[0]
+    base_business_name = f"{display_name}'s Business"
     business_name = base_business_name
     suffix = 2
     while db.query(Business).filter(Business.name == business_name).first():
         business_name = f"{base_business_name} {suffix}"
         suffix += 1
 
-    business = Business(name=business_name, email=email)
+    business = Business(name=business_name, email=normalized_email)
     db.add(business)
     db.flush()
 
     # Create a new user with a random unusable password
     random_password = str(uuid4())
     hashed_password = hash_password(random_password)
+    role_value = UserRole.BUSINESS_ADMIN.value if hasattr(UserRole.BUSINESS_ADMIN, 'value') else "business_admin"
     new_user = User(
-        name=name,
-        email=email,
+        name=display_name,
+        email=normalized_email,
         hashed_password=hashed_password,
-        role=UserRole.BUSINESS_ADMIN,
+        role=role_value,
         provider="google",
         email_verified=True,
         google_id=google_id,

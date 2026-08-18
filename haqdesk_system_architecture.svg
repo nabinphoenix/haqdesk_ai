@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#6D4AE2"/></marker>
+    <marker id="arrowDark" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#475569"/></marker>
+    <style>
+      .t{font-family:Arial,sans-serif;fill:#0F172A}.s{font-family:Arial,sans-serif;fill:#475569}.box{fill:#fff;stroke:#E2E8F0;stroke-width:2}.soft{fill:#F8FAFC;stroke:#E2E8F0;stroke-width:2}.purple{fill:#F4F1FF;stroke:#6D4AE2;stroke-width:3}.green{fill:#ECFDF5;stroke:#10B981;stroke-width:2}.warn{fill:#FFFBEB;stroke:#F59E0B;stroke-width:2;stroke-dasharray:10 7}.line{fill:none;stroke:#6D4AE2;stroke-width:4;marker-end:url(#arrow)}.db{fill:none;stroke:#475569;stroke-width:3;marker-end:url(#arrowDark)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+  <text x="72" y="64" class="t" font-size="38" font-weight="700">System Architecture</text>
+  <text x="72" y="98" class="s" font-size="21">How customer messages, business data and AI services work together.</text>
+
+  <text x="78" y="152" class="s" font-size="17" font-weight="700">CUSTOMER CHANNELS</text>
+  <rect x="70" y="175" width="220" height="84" rx="18" class="box"/><text x="180" y="210" text-anchor="middle" class="t" font-size="21" font-weight="700">Customer</text><text x="180" y="237" text-anchor="middle" class="s" font-size="16">Starts a conversation</text>
+  <rect x="70" y="285" width="220" height="70" rx="16" class="soft"/><circle cx="102" cy="320" r="18" fill="#1877F2"/><text x="102" y="327" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="#fff">f</text><text x="133" y="327" class="t" font-size="19" font-weight="700">Facebook</text>
+  <rect x="70" y="370" width="220" height="70" rx="16" class="soft"/><circle cx="102" cy="405" r="18" fill="#E1306C"/><text x="102" y="412" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="#fff">◎</text><text x="133" y="412" class="t" font-size="19" font-weight="700">Instagram</text>
+  <rect x="70" y="455" width="220" height="70" rx="16" class="soft"/><circle cx="102" cy="490" r="18" fill="#06B6D4"/><text x="102" y="497" text-anchor="middle" font-family="Arial" font-size="19" font-weight="700" fill="#fff">@</text><text x="133" y="497" class="t" font-size="19" font-weight="700">Email</text>
+  <rect x="70" y="540" width="220" height="82" rx="16" class="warn"/><text x="180" y="572" text-anchor="middle" class="t" font-size="18" font-weight="700">WhatsApp</text><text x="180" y="598" text-anchor="middle" class="s" font-size="14">Partial / not verified</text>
+
+  <rect x="350" y="230" width="220" height="300" rx="22" class="purple"/>
+  <text x="460" y="270" text-anchor="middle" class="t" font-size="22" font-weight="700">Meta Platform</text>
+  <text x="460" y="296" text-anchor="middle" class="s" font-size="15">Webhooks + Graph API</text>
+  <rect x="382" y="330" width="156" height="60" rx="14" class="box"/><text x="460" y="356" text-anchor="middle" class="t" font-size="17" font-weight="700">Inbound events</text><text x="460" y="378" text-anchor="middle" class="s" font-size="13">Signed webhooks</text>
+  <rect x="382" y="410" width="156" height="60" rx="14" class="box"/><text x="460" y="436" text-anchor="middle" class="t" font-size="17" font-weight="700">Outbound replies</text><text x="460" y="458" text-anchor="middle" class="s" font-size="13">Graph API v18.0</text>
+
+  <rect x="630" y="160" width="440" height="475" rx="24" class="purple"/>
+  <text x="850" y="198" text-anchor="middle" class="t" font-size="25" font-weight="700">FastAPI Backend</text>
+  <text x="850" y="225" text-anchor="middle" class="s" font-size="16">Secured APIs, webhooks and business logic</text>
+  <rect x="660" y="250" width="180" height="72" rx="14" class="box"/><text x="750" y="278" text-anchor="middle" class="t" font-size="17" font-weight="700">Auth + RBAC</text><text x="750" y="301" text-anchor="middle" class="s" font-size="13">JWT dependencies</text>
+  <rect x="860" y="250" width="180" height="72" rx="14" class="box"/><text x="950" y="278" text-anchor="middle" class="t" font-size="17" font-weight="700">Webhooks</text><text x="950" y="301" text-anchor="middle" class="s" font-size="13">Normalize + route</text>
+  <rect x="660" y="340" width="180" height="72" rx="14" class="box"/><text x="750" y="368" text-anchor="middle" class="t" font-size="17" font-weight="700">Inbox</text><text x="750" y="391" text-anchor="middle" class="s" font-size="13">Customers + messages</text>
+  <rect x="860" y="340" width="180" height="72" rx="14" class="box"/><text x="950" y="368" text-anchor="middle" class="t" font-size="17" font-weight="700">AI / RAG</text><text x="950" y="391" text-anchor="middle" class="s" font-size="13">Retrieve + draft</text>
+  <rect x="660" y="430" width="180" height="72" rx="14" class="box"/><text x="750" y="458" text-anchor="middle" class="t" font-size="17" font-weight="700">Analytics</text><text x="750" y="481" text-anchor="middle" class="s" font-size="13">Tenant aggregates</text>
+  <rect x="860" y="430" width="180" height="72" rx="14" class="box"/><text x="950" y="458" text-anchor="middle" class="t" font-size="17" font-weight="700">Team + Settings</text><text x="950" y="481" text-anchor="middle" class="s" font-size="13">Roles + integrations</text>
+  <rect x="660" y="530" width="380" height="72" rx="14" class="green"/><text x="850" y="559" text-anchor="middle" class="t" font-size="17" font-weight="700">Tenant security boundary</text><text x="850" y="583" text-anchor="middle" class="s" font-size="14">Every business query is restricted by authenticated business_id</text>
+
+  <rect x="1130" y="160" width="390" height="255" rx="22" class="soft"/>
+  <text x="1325" y="198" text-anchor="middle" class="t" font-size="23" font-weight="700">Next.js Dashboard</text><text x="1325" y="225" text-anchor="middle" class="s" font-size="15">Authenticated business workspace</text>
+  <rect x="1160" y="252" width="150" height="58" rx="13" class="box"/><text x="1235" y="287" text-anchor="middle" class="t" font-size="16" font-weight="700">Unified Inbox</text>
+  <rect x="1330" y="252" width="160" height="58" rx="13" class="box"/><text x="1410" y="287" text-anchor="middle" class="t" font-size="16" font-weight="700">Knowledge Base</text>
+  <rect x="1160" y="327" width="95" height="58" rx="13" class="box"/><text x="1208" y="362" text-anchor="middle" class="t" font-size="15" font-weight="700">Analytics</text>
+  <rect x="1270" y="327" width="95" height="58" rx="13" class="box"/><text x="1318" y="362" text-anchor="middle" class="t" font-size="15" font-weight="700">Team</text>
+  <rect x="1380" y="327" width="110" height="58" rx="13" class="box"/><text x="1435" y="362" text-anchor="middle" class="t" font-size="15" font-weight="700">Settings</text>
+  <rect x="1130" y="445" width="390" height="120" rx="22" class="purple"/><text x="1325" y="482" text-anchor="middle" class="t" font-size="21" font-weight="700">LiteLLM Gateway</text><text x="1325" y="509" text-anchor="middle" class="s" font-size="15">Groq primary + configured provider fallbacks</text><text x="1325" y="536" text-anchor="middle" class="s" font-size="14">Generates grounded reply suggestions</text>
+
+  <rect x="350" y="690" width="430" height="145" rx="22" class="soft"/><text x="565" y="727" text-anchor="middle" class="t" font-size="22" font-weight="700">PostgreSQL</text><text x="565" y="754" text-anchor="middle" class="s" font-size="14">Businesses + users • customers + identities</text><text x="565" y="778" text-anchor="middle" class="s" font-size="14">Conversations + messages • integrations</text><text x="565" y="802" text-anchor="middle" class="s" font-size="14">Knowledge metadata + analytics source data</text>
+  <rect x="820" y="690" width="330" height="145" rx="22" class="purple"/><text x="985" y="727" text-anchor="middle" class="t" font-size="22" font-weight="700">Qdrant</text><text x="985" y="754" text-anchor="middle" class="s" font-size="14">techsuru_collection</text><text x="985" y="778" text-anchor="middle" class="s" font-size="14">1024-dim cosine vectors</text><text x="985" y="802" text-anchor="middle" class="s" font-size="14">business_id-filtered document chunks</text>
+  <rect x="1190" y="690" width="330" height="145" rx="22" class="soft"/><text x="1355" y="727" text-anchor="middle" class="t" font-size="22" font-weight="700">Local File Storage</text><text x="1355" y="754" text-anchor="middle" class="s" font-size="14">Temporary knowledge uploads</text><text x="1355" y="778" text-anchor="middle" class="s" font-size="14">uploads/attachments for chat media</text><text x="1355" y="802" text-anchor="middle" class="s" font-size="14">Temporary knowledge files are deleted</text>
+
+  <path d="M180 259V285" class="line"/><path d="M290 320H350" class="line"/><path d="M290 405H350" class="line"/><path d="M290 490H330V480H350" class="line"/><path d="M570 360H630" class="line"/><path d="M630 440H570" class="line"/>
+  <path d="M1070 286H1130" class="line"/><path d="M1130 376H1070" class="line"/><path d="M1070 466H1130" class="line"/>
+  <path d="M750 635V690" class="db"/><path d="M950 635V690" class="line"/><path d="M1040 566H1100V762H1190" class="db"/>
+  <path d="M290 581H320V610H350" fill="none" stroke="#F59E0B" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#arrowDark)"/>
+  <text x="72" y="865" class="s" font-size="14">Solid arrows: implemented request, webhook, data and AI flows   •   Dashed: partial / operational verification pending</text>
+</svg>

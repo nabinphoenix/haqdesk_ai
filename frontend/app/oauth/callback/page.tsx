@@ -14,7 +14,15 @@ export default function OAuthCallback() {
 
     // If an error param is present (e.g., unverified_email), handle it
     if (error) {
-      alert(`Authentication error: ${error}`)
+      const messages: Record<string, string> = {
+        invite_email_mismatch: "Please choose the Google account that matches the email address in your invitation.",
+        invalid_invitation: "This invitation is invalid, revoked, or has already been used.",
+        expired_invitation: "This invitation has expired. Ask your business administrator for a new one.",
+        email_already_registered: "An account already exists for this email. Sign in instead or ask your administrator for help.",
+        unverified_email: "Your Google email address is not verified.",
+        oauth_failed: "Google authentication could not be completed.",
+      }
+      alert(messages[error] || `Authentication error: ${error}`)
       router.replace("/login")
       return
     }
@@ -44,7 +52,11 @@ export default function OAuthCallback() {
           if (data.user.email) localStorage.setItem("userEmail", data.user.email)
           if (data.user.business_id) localStorage.setItem("userBusinessId", data.user.business_id)
           
-          router.replace("/inbox")
+          const role = data.user.role
+          if (role === "super_admin") router.replace("/super-admin")
+          else if (role === "supervisor") router.replace("/supervisor")
+          else if (role === "agent") router.replace("/agent")
+          else router.replace("/inbox")
         } else {
           alert("Failed to exchange authentication code.")
           router.replace("/login")
@@ -61,8 +73,8 @@ export default function OAuthCallback() {
 
   // Simple UI while processing – could be a spinner or brand logo
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">
-      <p className="text-lg font-medium text-gray-700 dark:text-gray-200">
+    <div className="flex h-screen items-center justify-center bg-background dark:bg-surface">
+      <p className="text-lg font-medium text-foreground">
         Processing authentication...
       </p>
     </div>

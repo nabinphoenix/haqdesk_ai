@@ -59,16 +59,24 @@ def test_meta_plain_text_removes_html_and_markdown_but_keeps_breaks():
 
 
 def test_signature_is_present_exactly_once():
-    rendered = ensure_signature("Hello Rupa Ma'am,\n\nYour answer.\n\nBest regards,\nTechSuru Support Team")
+    rendered = ensure_signature(
+        "Hello Rupa Ma'am,\n\nYour answer.\n\nBest regards,\nOld Name Support Team",
+        "Acme Repairs",
+    )
     assert rendered.count("Best regards,") == 1
-    assert rendered.endswith("Best regards,\nTechSuru Support Team")
+    assert rendered.endswith("Best regards,\nAcme Repairs Support Team")
 
 
 def test_email_has_only_the_approved_support_signature():
-    rendered = email_html(ensure_signature("Hello,\n\nYour answer."))
+    rendered = email_html(ensure_signature("Hello,\n\nYour answer.", "Acme Repairs"))
     assert rendered.count("Best regards,") == 1
-    assert rendered.count("TechSuru Support Team") == 1
+    assert rendered.count("Acme Repairs Support Team") == 1
     assert "Automated AI Response" not in rendered
+
+
+def test_blank_business_name_uses_neutral_signature():
+    rendered = ensure_signature("Hello,\n\nYour answer.", "")
+    assert rendered.endswith("Best regards,\nSupport Team")
 
 
 def test_generic_platform_identity_is_not_used_as_name():

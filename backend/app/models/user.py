@@ -19,6 +19,7 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default=UserRole.BUSINESS_ADMIN)
     status = Column(String, default="offline")
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # OAuth and verification fields
     provider = Column(String, default="local")

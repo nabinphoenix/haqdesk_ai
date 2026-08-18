@@ -10,6 +10,7 @@ class KnowledgeDocument(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     business_id = Column(Integer, ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String, nullable=False)
+    storage_path = Column(String, nullable=True)
     status = Column(String, default="processing")
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     chunks = relationship("KnowledgeChunk", back_populates="document", cascade="all, delete")

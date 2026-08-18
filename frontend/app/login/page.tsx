@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 import { AlertCircle } from "lucide-react";
 import PasswordField from "@/components/ui/PasswordField";
 
@@ -43,8 +44,13 @@ export default function LoginPage() {
                     localStorage.setItem("userBusinessId", data.user.business_id);
                 }
                 toast.success(`Welcome back, ${data.user.name}!`);
-                if (data.user.role === "super_admin") {
+                const role = data.user.role;
+                if (role === "super_admin") {
                     router.push("/super-admin");
+                } else if (role === "supervisor") {
+                    router.push("/supervisor");
+                } else if (role === "agent") {
+                    router.push("/agent");
                 } else {
                     router.push("/inbox");
                 }
@@ -62,14 +68,14 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex bg-[#090514]">
+        <div className="relative min-h-screen overflow-hidden bg-background">
+          <ThemeToggle className="absolute right-6 top-6 z-30 sm:right-10" />
+          <div className="pointer-events-none absolute -left-64 -top-64 h-[520px] w-[520px] rounded-full bg-accent/20 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-52 left-[38%] h-[440px] w-[440px] rounded-full bg-accent/10 blur-[110px]" />
+          <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1440px] px-6 sm:px-10 xl:px-14 2xl:px-16">
 
             {/* LEFT PANEL — branding */}
-            <div className="hidden lg:flex w-[45%] flex-col justify-between p-12 relative overflow-hidden">
-
-                {/* Background glow */}
-                <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-[#6D4AE2]/20 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-                <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-[100px] translate-x-1/2 translate-y-1/2 pointer-events-none" />
+            <div className="relative hidden w-[52%] flex-col justify-between py-12 pr-12 lg:flex xl:pr-20">
 
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 z-10">
@@ -80,30 +86,30 @@ export default function LoginPage() {
                             className="w-full h-full object-contain"
                         />
                     </div>
-                    <span className="text-white font-bold text-[16px] tracking-tight">
-                        HaqDesk<span className="text-[#818CF8]"> AI</span>
+                    <span className="text-foreground font-bold text-[16px] tracking-tight">
+                        HaqDesk<span className="text-accent-glow"> AI</span>
                     </span>
                 </Link>
 
                 {/* Center content */}
                 <div className="z-10">
-                    <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 mb-6">
+                    <div className="inline-flex items-center gap-2 bg-surface-wash border border-border rounded-full px-4 py-1.5 mb-6">
                         <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                        <span className="text-[11px] font-medium text-gray-300 uppercase tracking-wider">AI-Powered Support Platform</span>
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI-Powered Support Platform</span>
                     </div>
-                    <h2 className="text-4xl font-black text-white leading-tight tracking-tight mb-4">
+                    <h2 className="text-4xl font-black text-foreground leading-tight tracking-tight mb-4">
                         Your customers<br />
                         deserve faster<br />
-                        <span className="text-[#818CF8]">answers.</span>
+                        <span className="text-accent-glow">answers.</span>
                     </h2>
-                    <p className="text-gray-400 text-[14px] leading-relaxed max-w-sm">
+                    <p className="text-muted-foreground text-[14px] leading-relaxed max-w-sm">
                         HaqDesk AI unifies your Instagram, WhatsApp, and Messenger conversations with AI-powered reply suggestions.
                     </p>
 
                     {/* Feature pills */}
                     <div className="flex flex-wrap gap-2 mt-8">
                         {["Unified Inbox", "RAG Knowledge Base", "AI Draft Replies", "BERT Sentiment"].map((f) => (
-                            <span key={f} className="text-[11px] font-medium text-gray-300 bg-white/5 border border-white/10 rounded-full px-3 py-1">
+                            <span key={f} className="text-[11px] font-medium text-muted-foreground bg-surface-wash border border-border rounded-full px-3 py-1">
                                 {f}
                             </span>
                         ))}
@@ -117,21 +123,21 @@ export default function LoginPage() {
                         { value: "80%+", label: "RAG Accuracy" },
                         { value: "3", label: "Platforms" },
                     ].map((s) => (
-                        <div key={s.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center">
-                            <p className="text-lg font-black text-white">{s.value}</p>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-wider">{s.label}</p>
+                        <div key={s.label} className="rounded-xl border border-border bg-surface-wash p-3 text-center">
+                            <p className="text-lg font-black text-foreground">{s.value}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* RIGHT PANEL — form */}
-            <div className="flex-1 flex items-center justify-center p-6 relative">
+            <div className="relative flex w-full items-center justify-center py-12 lg:w-[48%] lg:pl-12 xl:pl-20">
 
                 {/* Back to home — mobile only */}
                 <Link
                     href="/"
-                    className="absolute top-6 left-6 flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-white transition-all lg:hidden"
+                    className="absolute top-6 left-6 flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-all lg:hidden"
                 >
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M10 3L5 8l5 5" />
@@ -143,10 +149,10 @@ export default function LoginPage() {
 
                     {/* Header */}
                     <div className="mb-8">
-                        <h1 className="text-2xl font-black text-white tracking-tight mb-1">
+                        <h1 className="text-2xl font-black text-foreground tracking-tight mb-1">
                             Welcome back
                         </h1>
-                        <p className="text-[13px] text-gray-400">
+                        <p className="text-[13px] text-muted-foreground">
                             Sign in to your HaqDesk AI account
                         </p>
                     </div>
@@ -155,7 +161,7 @@ export default function LoginPage() {
                     <button
                         type="button"
                         onClick={() => { window.location.href = `${API_URL}/api/v1/auth/google`; }}
-                        className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-white/10 bg-white/5 text-[13px] font-medium text-white hover:bg-white/10 transition-all mb-5"
+                        className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-border bg-surface-wash text-[13px] font-medium text-foreground hover:bg-surface-wash transition-all mb-5"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18">
                             <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.17 3.24l6.85-6.85C36.93 2.57 30.84 0 24 0 14.61 0 6.5 5.23 2.45 12.79l7.92 6.15C12.33 13.03 17.71 9.5 24 9.5z" />
@@ -169,14 +175,14 @@ export default function LoginPage() {
 
                     {/* Divider */}
                     <div className="flex items-center gap-3 mb-5">
-                        <div className="flex-1 h-px bg-white/10" />
-                        <span className="text-[11px] text-gray-500 uppercase tracking-wider">or</span>
-                        <div className="flex-1 h-px bg-white/10" />
+                        <div className="flex-1 h-px bg-surface-wash" />
+                        <span className="text-[11px] text-muted-foreground uppercase tracking-wider">or</span>
+                        <div className="flex-1 h-px bg-surface-wash" />
                     </div>
 
                     {/* Error */}
                     {error && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] mb-4">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-[var(--error-surface)] border border-[var(--error-border)] text-[var(--error-foreground)] text-[12px] mb-4">
                             <AlertCircle size={14} className="shrink-0" />
                             {error}
                         </div>
@@ -186,14 +192,14 @@ export default function LoginPage() {
                     <form onSubmit={handleSubmit} className="space-y-4">
 
                         <div>
-                            <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                                 Email Address
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-600 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all"
+                                className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] placeholder:text-muted-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-all"
                                 placeholder="you@example.com"
                                 required
                             />
@@ -207,7 +213,7 @@ export default function LoginPage() {
                             placeholder="••••••••"
                             required
                             labelAction={
-                                <Link href="/forgot-password" className="text-[11px] text-purple-400 hover:text-purple-300 transition-colors">
+                                <Link href="/forgot-password" className="text-[11px] text-accent-glow hover:text-purple-300 transition-colors">
                                     Forgot password?
                                 </Link>
                             }
@@ -216,11 +222,11 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-2.5 rounded-xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[13px] font-semibold transition-all active:scale-95 disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2 mt-2"
+                            className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-on-accent text-[13px] font-semibold transition-all active:scale-95 disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2 mt-2"
                         >
                             {loading ? (
                                 <>
-                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-3.5 h-3.5 border-2 border-on-accent border-t-transparent rounded-full animate-spin" />
                                     Signing in...
                                 </>
                             ) : (
@@ -231,37 +237,16 @@ export default function LoginPage() {
                     </form>
 
                     {/* Register link */}
-                    <p className="text-center text-[12px] text-gray-500 mt-5">
+                    <p className="text-center text-[12px] text-muted-foreground mt-5">
                         Don't have an account?{" "}
-                        <Link href="/register" className="text-purple-400 hover:text-purple-300 font-medium transition-colors">
+                        <Link href="/register" className="text-accent-glow hover:text-purple-300 font-medium transition-colors">
                             Register here
                         </Link>
                     </p>
 
-                    {/* Demo credentials — collapsed by default */}
-                    <details className="mt-6 group">
-                        <summary className="text-[11px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors text-center list-none flex items-center justify-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                <circle cx="8" cy="8" r="6" />
-                                <path d="M8 7v4M8 5.5v.5" />
-                            </svg>
-                            Demo credentials
-                        </summary>
-                        <div className="mt-3 p-3 rounded-xl border border-white/10 bg-white/[0.03] text-[11px] text-gray-400 space-y-1">
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Email</span>
-                                <span className="font-mono text-gray-300">nabinepali012@gmail.com</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Password</span>
-                                <span className="font-mono text-gray-300">admin123</span>
-                            </div>
-                        </div>
-                    </details>
-
                 </div>
             </div>
-
+          </div>
         </div>
     );
 }

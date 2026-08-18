@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     META_VERIFY_TOKEN: Optional[str] = None
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
     WHATSAPP_VERIFY_TOKEN: Optional[str] = None
+    ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX: bool = False
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
 
     OAUTH_REDIRECT_URI: str = "http://localhost:3000/oauth/callback"
@@ -39,19 +41,25 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES_PER_MODEL: int = 1
     LLM_FALLBACK_ENABLED: bool = True
 
+    # Embedding Model
+    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-small"
+    EMBEDDING_DIM: int = 384
+
+    # Ollama (local LLM server for models like gemma3:1b)
+    OLLAMA_API_BASE: str = "http://localhost:11434"
+
     # Provider Keys
     GROQ_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
-    OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
 
     VECTOR_DB_PATH: str = "./vector_db"
+    KNOWLEDGE_UPLOAD_ROOT: str = "uploads/knowledge"
 
     # Qdrant Vector Database
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
-    QDRANT_COLLECTION_NAME: str = "techsuru_collection"
+    QDRANT_COLLECTION_PREFIX: str = "haqdesk_business"
 
     # Email (Gmail SMTP)
     MAIL_USERNAME: Optional[str] = None
@@ -59,8 +67,13 @@ class Settings(BaseSettings):
     MAIL_FROM: Optional[str] = None
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_PORT: int = 587
+    MAIL_IMAP_HOST: str = "imap.gmail.com"
+    MAIL_IMAP_PORT: int = 993
 
-    # Email (Gmail IMAP Polling)
+    # TechSuru fallback email inbox (business_id=1)
+    # These must be declared here so pydantic-settings loads them from .env.
+    # Without declaration, extra='ignore' silently drops them and the poller
+    # never polls techsuru1@gmail.com.
     TECHSURU_IMAP_EMAIL: Optional[str] = None
     TECHSURU_IMAP_PASSWORD: Optional[str] = None
     TECHSURU_IMAP_HOST: str = "imap.gmail.com"
@@ -68,5 +81,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()

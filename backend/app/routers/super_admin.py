@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_super_admin
 from app.models.business import Business
 from app.models.conversation import Conversation
+from app.models.customer import Customer
 from app.models.integration import Integration
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.message import Message
@@ -20,6 +21,70 @@ router = APIRouter(prefix="/super-admin", tags=["super-admin"])
 
 def _iso(value):
     return value.isoformat() if value else None
+
+
+@router.get("/stats")
+def platform_stats(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_super_admin),
+):
+    return {
+        "total_businesses": db.query(func.count(Business.id)).scalar() or 0,
+        "total_users": db.query(func.count(User.id)).scalar() or 0,
+        "total_messages": db.query(func.count(Message.id)).scalar() or 0,
+        "total_conversations": db.query(func.count(Conversation.id)).scalar() or 0,
+        "total_customers": db.query(func.count(Customer.id)).scalar() or 0,
+        "total_ai_drafts": db.query(func.count(Message.id)).filter(Message.ai_draft.isnot(None)).scalar() or 0,
+        "total_documents": db.query(func.count(KnowledgeDocument.id)).scalar() or 0,
+        "total_chunks": db.query(func.count(KnowledgeChunk.id)).scalar() or 0,
+    }
+
+
+@router.get("/businesses")
+def all_businesses(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_super_admin),
+):
+    result = []
+    for business in db.query(Business).order_by(Business.created_at.desc()).all():
+        owner = db.query(User).filter(
+            User.business_id == business.id, User.role == "business_admin"
+        ).first()
+        result.append({
+            "id": business.id,
+            "name": business.name,
+            "owner_email": owner.email if owner else None,
+            "user_count": db.query(func.count(User.id)).filter(User.business_id == business.id).scalar() or 0,
+            "message_count": db.query(func.count(Message.id)).join(Conversation).filter(Conversation.business_id == business.id).scalar() or 0,
+            "conversation_count": db.query(func.count(Conversation.id)).filter(Conversation.business_id == business.id).scalar() or 0,
+            "created_at": _iso(business.created_at),
+            "is_active": business.is_active,
+        })
+    return result
+
+
+@router.get("/users")
+def all_users(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_super_admin),
+):
+    businesses = {business.id: business.name for business in db.query(Business).all()}
+    return [{
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "role": user.role,
+        "status": user.status,
+        "business_id": user.business_id,
+        "business_name": businesses.get(user.business_id),
+        "created_at": _iso(user.created_at),
+    } for user in db.query(User).order_by(User.created_at.desc()).all()]
+
+
+@router.get("/health")
+def system_health(_current_user: User = Depends(require_super_admin)):
+    from app.core.preflight import run_preflight
+    return run_preflight()
 
 
 @router.get("/dashboard")

@@ -36,7 +36,7 @@ def send_email_as_business(
     html_body: str,
     from_email: str,
     from_password: str,
-    from_name: str = "TechSuru Support",
+    from_name: str,
     smtp_host: str = None,
     smtp_port: int = None,
 ) -> bool:
@@ -44,7 +44,8 @@ def send_email_as_business(
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"{from_name} <{from_email}>"
+        sender_name = (from_name or "").strip() or "Support Team"
+        msg["From"] = f"{sender_name} <{from_email}>"
         msg["To"] = to_email
 
         msg.attach(MIMEText(html_body, "html"))

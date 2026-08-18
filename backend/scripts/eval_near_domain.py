@@ -191,7 +191,7 @@ def grade_response(test_case, response_text, retrieved_chunks):
         return "🔍 UNCLEAR (manual review needed)", correct_hits, wrong_hits, hedge_count
 
 
-async def run_near_domain_evaluation():
+async def run_near_domain_evaluation(business_id: int):
     print("=" * 80)
     print("    HAQDESK AI — NEAR-DOMAIN CONFUSION TEST (SIMILAR-BUT-WRONG CHUNKS)")
     print("=" * 80)
@@ -218,7 +218,7 @@ async def run_near_domain_evaluation():
         print(f"  Key distinction:    {test['key_distinction']}")
 
         # Step 1: Retrieve top-3 chunks
-        chunks = rag_service.retrieve_chunks(query, business_id=1, top_k=3)
+        chunks = rag_service.retrieve_chunks(query, business_id=business_id, top_k=3)
         top_score = chunks[0]["similarity"] if chunks else 0.0
 
         print(f"\n  RETRIEVAL:")
@@ -321,4 +321,9 @@ async def run_near_domain_evaluation():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_near_domain_evaluation())
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--business-id", required=True, type=int)
+    args = parser.parse_args()
+    asyncio.run(run_near_domain_evaluation(args.business_id))

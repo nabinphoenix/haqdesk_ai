@@ -57,7 +57,7 @@ DECLINE_SIGNALS = [
 ]
 
 
-async def run_e2e_safety_evaluation():
+async def run_e2e_safety_evaluation(business_id: int):
     print("=" * 76)
     print("     HAQDESK AI — E2E SAFETY & HALLUCINATION TEST (WITH LLM)")
     print("=" * 76)
@@ -81,7 +81,7 @@ async def run_e2e_safety_evaluation():
         print(f"  Language: {lang}")
 
         # Step 1: Retrieve chunks
-        chunks = rag_service.retrieve_chunks(query, business_id=1, top_k=3)
+        chunks = rag_service.retrieve_chunks(query, business_id=business_id, top_k=3)
         top_score = chunks[0]["similarity"] if chunks else 0.0
         top_chunk_preview = chunks[0]["content"][:120].replace('\n', ' ') if chunks else "None"
 
@@ -178,4 +178,9 @@ async def run_e2e_safety_evaluation():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_e2e_safety_evaluation())
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--business-id", required=True, type=int)
+    args = parser.parse_args()
+    asyncio.run(run_e2e_safety_evaluation(args.business_id))

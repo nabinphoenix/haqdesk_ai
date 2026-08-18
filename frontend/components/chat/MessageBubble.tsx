@@ -61,21 +61,21 @@ export default function MessageBubble({
             label: "Positive", 
             border: "1px solid rgba(16,185,129,0.35)", 
             glow: "0 4px 20px rgba(16,185,129,0.12), 0 0 1px rgba(16,185,129,0.35)", 
-            text: "text-emerald-400" 
+            text: "text-[var(--success-foreground)]"
         },
         negative: { 
             emoji: "😠", 
             label: "Negative", 
             border: "1px solid rgba(239,68,68,0.35)", 
             glow: "0 4px 20px rgba(239,68,68,0.12), 0 0 1px rgba(239,68,68,0.35)", 
-            text: "text-red-400" 
+            text: "text-[var(--error-foreground)]"
         },
         neutral: { 
             emoji: "😐", 
             label: "Neutral", 
             border: "1px solid var(--border)", 
             glow: "0 1px 4px rgba(0,0,0,0.06)", 
-            text: "text-slate-400" 
+            text: "text-muted-foreground"
         }
     };
 
@@ -125,7 +125,7 @@ export default function MessageBubble({
                 >
                     {/* Sentiment Label inside bubble */}
                     {isCustomer && sentConfig && (
-                        <div className={`flex items-center gap-1 text-[10px] font-black ${sentConfig.text} uppercase tracking-wider mb-1 bg-white/5 px-2 py-0.5 rounded w-max`}>
+                        <div className={`flex items-center gap-1 text-[10px] font-black ${sentConfig.text} uppercase tracking-wider mb-1 bg-surface-wash px-2 py-0.5 rounded w-max`}>
                             <span>{sentConfig.emoji}</span>
                             <span>{sentConfig.label}</span>
                         </div>
@@ -206,25 +206,25 @@ export default function MessageBubble({
 
                     {/* Inline Suggested Draft Reply */}
                     {isCustomer && ai_draft && (
-                        <div className="mt-3.5 pt-3 border-t border-dashed border-white/10 text-left">
+                        <div className="mt-3.5 pt-3 border-t border-dashed border-border text-left">
                             <div className="flex items-center gap-1.5 mb-2">
-                                <div className="w-4.5 h-4.5 bg-gradient-to-tr from-[#6D4AE2] to-[#818CF8] rounded-md flex items-center justify-center text-white shrink-0">
+                                <div className="w-4.5 h-4.5 bg-gradient-to-tr from-accent to-accent-glow rounded-md flex items-center justify-center text-on-accent shrink-0">
                                     <Bot size={10} className="animate-pulse" />
                                 </div>
-                                <span className="text-[10px] font-black text-[#818CF8] uppercase tracking-[0.1em]">AI Draft</span>
+                                <span className="text-[10px] font-black text-accent-glow uppercase tracking-[0.1em]">AI Draft</span>
                                 {ai_language && (
-                                    <span className="text-[8px] px-1.5 py-0.2 bg-white/5 border border-white/10 rounded text-slate-400 capitalize font-black tracking-wider">
+                                    <span className="text-[8px] px-1.5 py-0.2 bg-surface-wash border border-border rounded text-muted-foreground capitalize font-black tracking-wider">
                                         {ai_language}
                                     </span>
                                 )}
                             </div>
-                            <p className="text-[12px] italic text-slate-300 bg-black/10 border border-white/5 p-2.5 rounded-xl pr-3 leading-relaxed">
+                            <p className="text-[12px] italic text-muted-foreground bg-surface-wash border border-border p-2.5 rounded-xl pr-3 leading-relaxed">
                                 "{ai_draft}"
                             </p>
                             <div className="flex gap-2 mt-2.5">
                                 <button
                                     onClick={() => onUseDraft && onUseDraft(ai_draft)}
-                                    className="px-3 py-1.5 bg-[#6D4AE2] text-white text-[9.5px] font-black uppercase tracking-wider rounded-lg hover:bg-[#5B3BC7] active:scale-95 transition-all shadow-md shadow-purple-950/20"
+                                    className="px-3 py-1.5 bg-accent text-on-accent text-[9.5px] font-black uppercase tracking-wider rounded-lg hover:bg-accent-hover active:scale-95 transition-all shadow-md shadow-purple-950/20"
                                 >
                                     Use Reply
                                 </button>
@@ -245,7 +245,7 @@ export default function MessageBubble({
             {/* Agent avatar */}
             {!isCustomer && (
                 <div
-                    className="w-7 h-7 rounded-xl shrink-0 flex items-center justify-center mb-0.5 text-white text-[9px] font-bold"
+                    className="w-7 h-7 rounded-xl shrink-0 flex items-center justify-center mb-0.5 text-foreground text-[9px] font-bold"
                     style={{ background: "linear-gradient(135deg, #6D4AE2, #8B5CF6)" }}
                 >
                     {agentInitials}

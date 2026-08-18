@@ -5,6 +5,17 @@ from typing import List, Dict, Any
 logger = logging.getLogger("uvicorn")
 
 
+def _is_document_noise(line: str) -> bool:
+    """Recognize generic document scaffolding without naming any tenant."""
+    normalized = re.sub(r"\s+", " ", line).strip()
+    return bool(
+        re.fullmatch(r"page\s+\d+(?:\s+of\s+\d+)?", normalized, re.IGNORECASE)
+        or re.fullmatch(r"(?:table\s+of\s+)?contents", normalized, re.IGNORECASE)
+        or re.fullmatch(r"all\s+questions\s+and\s+answers", normalized, re.IGNORECASE)
+        or re.fullmatch(r"(?:for\s+)?rag(?:\s+ai)?\s+knowledge\s+base", normalized, re.IGNORECASE)
+    )
+
+
 def parse_qa_pairs(text: str) -> List[Dict[str, str]]:
     """
     Parses Q&A pairs from text formatted as Q1) ... A) ... or Q1: ... A: ...
@@ -20,15 +31,13 @@ def parse_qa_pairs(text: str) -> List[Dict[str, str]]:
     matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
 
     qa_pairs = []
-    header_keywords = ['TechSuru', 'For RAG', 'Page ', 'Contents', 'All Questions and Answers']
-
     for q_match, a_match in matches:
         q_raw = q_match.strip()
         a_raw = a_match.strip()
 
         # Skip cover page / meta dataset text artifacts
         if any(ignore in q_raw or ignore in a_raw for ignore in [
-            "This PDF contains", "dataset for TechSuru", "structured FA", "RAG AI Knowledge Base"
+            "This PDF contains", "structured FA", "RAG AI Knowledge Base"
         ]):
             continue
 
@@ -37,7 +46,7 @@ def parse_qa_pairs(text: str) -> List[Dict[str, str]]:
         if len(q_lines) > 1:
             filtered_lines = [
                 line for line in q_lines
-                if not any(header in line for header in header_keywords)
+                if not _is_document_noise(line)
             ]
             q_raw = " ".join(filtered_lines).strip()
 

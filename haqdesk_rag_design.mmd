@@ -1,0 +1,43 @@
+flowchart LR
+  classDef core fill:#F4F1FF,stroke:#6D4AE2,stroke-width:2px,color:#0F172A;
+  classDef data fill:#F8FAFC,stroke:#475569,stroke-width:2px,color:#0F172A;
+  classDef human fill:#ECFDF5,stroke:#10B981,stroke-width:2px,color:#0F172A;
+  classDef warning fill:#FFFBEB,stroke:#F59E0B,stroke-width:2px,color:#0F172A;
+
+  subgraph Ingestion[Knowledge ingestion]
+    User[Business admin] --> Upload[POST /api/v1/knowledge/upload<br/>PDF, DOCX, TXT • 10 MB]
+    Upload --> Temp[Temporary file + background task]
+    Temp --> Extract[PyMuPDF fitz.open]
+    Extract --> Parse[Q&amp;A parser or sliding window<br/>500 words • 50 overlap]
+    Parse --> Embed[BAAI/bge-m3<br/>1024-dimensional embedding]
+    Embed --> PG[(PostgreSQL<br/>KnowledgeDocument + KnowledgeChunk)]
+    Embed --> Q[(Qdrant: techsuru_collection<br/>cosine vector + business_id payload)]
+    Limit[Partial: DOCX/TXT accepted but no<br/>type-specific extractor; status not finalized] --- Extract
+  end
+
+  subgraph Runtime[AI response generation]
+    Message[Customer message stored] --> Prep[Language + sentiment + history]
+    Prep --> QueryEmbed[BAAI/bge-m3 query embedding]
+    QueryEmbed --> Search[Qdrant similarity search<br/>top_k 5 + business_id filter]
+    Q --> Search
+    Search --> Check{Top score ≥ 0.45?}
+    Check -->|yes| Context[Top chunks + source filenames]
+    Check -->|no| Confirm[No policy assumption<br/>ask support team to confirm]
+    Context --> Prompt[Prompt: context + history +<br/>mode + language + sentiment]
+    Confirm --> Prompt
+    Prompt --> LLM[LiteLLM gateway<br/>Groq primary + configured fallbacks]
+    LLM --> Draft[Grounded AI reply suggestion<br/>confidence + sources + model metadata]
+    Draft --> Review[Human review]
+    Review --> Accept[Accept]
+    Review --> Edit[Edit]
+    Review --> Reject[Reject]
+    Accept --> Send[Approved reply → Meta Graph API]
+    Edit --> Send
+    Send --> Stored[(Reply stored in PostgreSQL<br/>ai_assisted metadata)]
+  end
+
+  class Upload,Embed,Q,QueryEmbed,Search,Prompt,LLM,Draft core;
+  class PG,Stored data;
+  class Review,Accept,Edit,Reject human;
+  class Limit,Confirm warning;
+

@@ -94,9 +94,12 @@ async def configure_email_integration(
             detail=f"Email connection validation failed: {exc}",
         ) from exc
 
+    # Match on both business_id AND email so multiple inboxes per business are
+    # supported. A second inbox should create a new row, not overwrite the first.
     integration = db.query(Integration).filter(
         Integration.business_id == current_user.business_id,
         Integration.platform == "email",
+        Integration.page_id == payload.email.lower(),
     ).first()
     if not integration:
         integration = Integration(

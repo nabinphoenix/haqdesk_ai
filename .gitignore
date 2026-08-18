@@ -72,9 +72,11 @@ yarn-error.log*
 
 HaqDesk_AI_query.sql
 
-# Qdrant vector storage (binary data)
+# Qdrant vector storage and backups (binary data)
 backend/qdrant_storage/
 qdrant_storage/
+backend/qdrant_backups/
+qdrant_backups/
 
 # Uploaded files
 backend/uploads/

@@ -32,7 +32,7 @@ export default function SocialIcon({ platform, className = "w-4 h-4" }: SocialIc
         case "Facebook":
             return <Facebook {...iconProps} className={`${className} text-[#2563EB]`} />; // Secondary Action Blue mapping
         default:
-            return <MoreHorizontal {...iconProps} className={`${className} text-[#64748B]`} />;
+            return <MoreHorizontal {...iconProps} className={`${className} text-muted-foreground`} />;
     }
 }
 

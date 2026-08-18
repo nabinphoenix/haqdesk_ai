@@ -34,6 +34,7 @@ interface Conversation {
     platform: string;
     unread?: number;
     priority?: string;
+    deleted_at?: string | null;
 }
 
 // ── Platform config ────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ function Avatar({ name, size = 40, platform }: { name: string; size?: number; pl
     return (
         <div className="relative shrink-0" style={{ width: size, height: size }}>
             <div
-                className="w-full h-full rounded-2xl flex items-center justify-center font-bold text-white"
+                className="w-full h-full rounded-2xl flex items-center justify-center font-bold text-foreground"
                 style={{ background: bg, fontSize: size * 0.35 }}
             >
                 {initials}
@@ -143,10 +144,12 @@ export default function InboxPage() {
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showCustomerPanel, setShowCustomerPanel] = useState(true);
-    const [deletedConversations, setDeletedConversations] = useState<any[]>([]);
+    const [deletedConversations, setDeletedConversations] = useState<Conversation[]>([]);
     const [showDeleted, setShowDeleted] = useState(false);
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+    const [confirmPermanentDeleteId, setConfirmPermanentDeleteId] = useState<number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isPermanentlyDeleting, setIsPermanentlyDeleting] = useState(false);
     const [aiMode, setAiMode] = useState<"auto" | "review">("review");
     const [isLoading, setIsLoading] = useState(true);
 
@@ -276,6 +279,18 @@ export default function InboxPage() {
         }
     }, [router, playNotificationSound]);
 
+    const fetchDeletedConversations = useCallback(async () => {
+        try {
+            const res = await fetchWithAuth("/api/v1/inbox/conversations/deleted");
+            if (res.ok) {
+                const data = await res.json();
+                setDeletedConversations(data);
+            }
+        } catch (e) {
+            console.error("Failed to fetch deleted conversations:", e);
+        }
+    }, []);
+
     // Auth guard
     useEffect(() => {
         const token = localStorage.getItem("token");
@@ -283,6 +298,7 @@ export default function InboxPage() {
         setUserRole(localStorage.getItem("userRole"));
         setIsAuth(true);
         fetchConversations();
+        fetchDeletedConversations();
         fetchAiMode();
         
         const interval = setInterval(fetchConversations, 3000);
@@ -295,7 +311,7 @@ export default function InboxPage() {
             clearInterval(interval);
             window.removeEventListener('customerLinked', handleLinkEvent);
         };
-    }, [router, fetchConversations, fetchAiMode]);
+    }, [router, fetchConversations, fetchDeletedConversations, fetchAiMode]);
 
     const handleDeleteConversation = (conversationId: number) => {
         setConfirmDeleteId(conversationId);
@@ -326,16 +342,6 @@ export default function InboxPage() {
         }
     };
 
-    const fetchDeletedConversations = async () => {
-        try {
-            const res = await fetchWithAuth("/api/v1/inbox/conversations/deleted");
-            if (res.ok) {
-                const data = await res.json();
-                setDeletedConversations(data);
-            }
-        } catch (e) { console.error(e); }
-    };
-
     const handleRestoreConversation = async (conversationId: number) => {
         try {
             const res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/restore`, {
@@ -349,11 +355,34 @@ export default function InboxPage() {
         } catch (e) { toast.error("Restore failed"); }
     };
 
+    const executePermanentDeleteConversation = async () => {
+        if (confirmPermanentDeleteId === null) return;
+        setIsPermanentlyDeleting(true);
+        try {
+            const res = await fetchWithAuth(
+                `/api/v1/inbox/conversations/${confirmPermanentDeleteId}/permanent`,
+                { method: "DELETE" }
+            );
+            if (res.ok) {
+                setDeletedConversations(prev => prev.filter(c => c.id !== confirmPermanentDeleteId));
+                toast.success("Conversation permanently deleted");
+            } else {
+                toast.error("Failed to permanently delete conversation");
+            }
+        } catch (e) {
+            console.error("Permanent delete failed:", e);
+            toast.error("Network error");
+        } finally {
+            setIsPermanentlyDeleting(false);
+            setConfirmPermanentDeleteId(null);
+        }
+    };
+
     useEffect(() => {
         if (showDeleted) {
             fetchDeletedConversations();
         }
-    }, [showDeleted]);
+    }, [showDeleted, fetchDeletedConversations]);
 
     const handleUpdatePriority = async (conversationId: number, priority: string) => {
         try {
@@ -379,10 +408,20 @@ export default function InboxPage() {
         setTimeout(() => setIsRefreshing(false), 600);
     };
 
-    const filtered = conversations.filter(c => {
-        const matchPlatform = selectedPlatform === "all" || c.platform.toLowerCase() === selectedPlatform;
+    const platformConversations = conversations.filter(c =>
+        selectedPlatform === "all" || c.platform.toLowerCase() === selectedPlatform
+    );
+    const platformDeletedConversations = deletedConversations.filter(c =>
+        selectedPlatform === "all" || c.platform.toLowerCase() === selectedPlatform
+    );
+
+    const filtered = platformConversations.filter(c => {
         const matchSearch = !search || c.customer_name.toLowerCase().includes(search.toLowerCase()) || c.last_message?.toLowerCase().includes(search.toLowerCase());
-        return matchPlatform && matchSearch;
+        return matchSearch;
+    });
+    const filteredDeleted = platformDeletedConversations.filter(c => {
+        const matchSearch = !search || c.customer_name.toLowerCase().includes(search.toLowerCase()) || c.last_message?.toLowerCase().includes(search.toLowerCase());
+        return matchSearch;
     });
 
     const selectedConv = conversations.find(c => c.id === selectedConvId);
@@ -409,11 +448,22 @@ export default function InboxPage() {
                 isDangerous={true}
                 isPending={isDeleting}
             />
+            <ConfirmModal
+                isOpen={confirmPermanentDeleteId !== null}
+                title="Permanently Delete Conversation"
+                message="This will permanently delete the conversation and all of its messages. This action cannot be undone."
+                confirmLabel={isPermanentlyDeleting ? "Deleting…" : "Delete Permanently"}
+                cancelLabel="Cancel"
+                onConfirm={executePermanentDeleteConversation}
+                onCancel={() => setConfirmPermanentDeleteId(null)}
+                isDangerous={true}
+                isPending={isPermanentlyDeleting}
+            />
 
             {/* ── COL 1: Platform icon rail ─────────────────────────────────── */}
             <div className="w-[72px] shrink-0 flex flex-col items-center py-4 gap-2 border-r border-[var(--border)] bg-[var(--surface)] z-30">
-                <div className="mb-2 w-9 h-9 rounded-xl flex items-center justify-center bg-[#6D4AE2]/10">
-                    <Inbox size={16} className="text-[#6D4AE2]" />
+                <div className="mb-2 w-9 h-9 rounded-xl flex items-center justify-center bg-accent/10">
+                    <Inbox size={16} className="text-accent" />
                 </div>
 
                 <div className="w-full px-2 flex flex-col gap-1.5">
@@ -454,7 +504,7 @@ export default function InboxPage() {
                 {/* Refresh */}
                 <button
                     onClick={handleRefresh}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-secondary)] hover:text-[#6D4AE2] hover:bg-[#6D4AE2]/10 transition-all"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-secondary)] hover:text-accent hover:bg-accent/10 transition-all"
                     title="Refresh"
                 >
                     <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} />
@@ -477,15 +527,15 @@ export default function InboxPage() {
                                 {PLATFORM_CONFIG[selectedPlatform].label}
                             </h1>
                             <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                                {filtered.length} conversation{filtered.length !== 1 ? "s" : ""}
+                                {(showDeleted ? filteredDeleted : filtered).length} conversation{(showDeleted ? filteredDeleted : filtered).length !== 1 ? "s" : ""}
                             </p>
                         </div>
                         <button
                             onClick={handleToggleAiMode}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${
                                 aiMode === "auto"
-                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
-                                    : "bg-[#6D4AE2]/15 border-[#6D4AE2]/40 text-[#818CF8] hover:bg-[#6D4AE2]/25"
+                                    ? "bg-[var(--success-surface)] border-emerald-500/40 text-[var(--success-foreground)] hover:bg-[var(--success-surface)]"
+                                    : "bg-accent/15 border-accent/40 text-accent-glow hover:bg-accent/25"
                             }`}
                             title="Toggle between Autonomous Auto-Send and Manual Review Mode"
                         >
@@ -517,21 +567,21 @@ export default function InboxPage() {
                             onClick={() => setShowDeleted(false)}
                             className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                                 !showDeleted
-                                    ? "bg-[#6D4AE2] text-white shadow-sm"
+                                    ? "bg-accent text-on-accent shadow-sm"
                                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                             }`}
                         >
-                            All ({conversations.length})
+                            All ({platformConversations.length})
                         </button>
                         <button
                             onClick={() => setShowDeleted(true)}
                             className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                                 showDeleted
-                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                                    : "text-[var(--text-secondary)] hover:text-red-400"
+                                    ? "bg-[var(--error-surface)] text-[var(--error-foreground)] border border-[var(--error-border)]"
+                                    : "text-[var(--text-secondary)] hover:text-[var(--error-foreground)]"
                             }`}
                         >
-                            Deleted ({deletedConversations.length})
+                            Deleted ({platformDeletedConversations.length})
                         </button>
                     </div>
                 </div>
@@ -540,16 +590,16 @@ export default function InboxPage() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {showDeleted ? (
                         <div className="p-2 space-y-0.5">
-                            {deletedConversations.length === 0 ? (
+                            {filteredDeleted.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-secondary)] py-12">
                                     <Trash2 size={28} className="opacity-30" />
                                     <p className="text-[12px] text-center">No deleted conversations</p>
                                 </div>
                             ) : (
-                                deletedConversations.map(conv => (
+                                filteredDeleted.map(conv => (
                                     <div
                                         key={conv.id}
-                                        className="relative group flex items-center gap-3 px-3 py-3 rounded-xl border border-transparent hover:bg-white/5 transition-all"
+                                        className="relative group flex items-center gap-3 px-3 py-3 rounded-xl border border-transparent hover:bg-surface-wash transition-all"
                                     >
                                         {/* Avatar */}
                                         <Avatar name={conv.customer_name} size={40} platform={conv.platform} />
@@ -558,20 +608,29 @@ export default function InboxPage() {
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{conv.customer_name}</p>
                                             <p className="text-[11.5px] text-[var(--text-secondary)] truncate">{conv.last_message || "No messages yet"}</p>
-                                            <p className="text-[10px] text-red-400 mt-0.5">
+                                            <p className="text-[10px] text-[var(--error-foreground)] mt-0.5">
                                                 Deleted {conv.deleted_at ? new Date(conv.deleted_at).toLocaleDateString() : ""}
                                             </p>
                                         </div>
 
-                                        {/* Restore button */}
+                                        {/* Restore and permanent delete actions */}
                                         {isAdmin && (
-                                            <button
-                                                onClick={() => handleRestoreConversation(conv.id)}
-                                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-bold hover:bg-purple-500/30 transition-all cursor-pointer"
-                                            >
-                                                <RefreshCw size={11} />
-                                                Restore
-                                            </button>
+                                            <div className="flex flex-col items-stretch gap-1">
+                                                <button
+                                                    onClick={() => handleRestoreConversation(conv.id)}
+                                                    className="flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-accent-glow border border-accent/30 text-[10px] font-bold hover:bg-purple-500/30 transition-all cursor-pointer"
+                                                >
+                                                    <RefreshCw size={11} />
+                                                    Restore
+                                                </button>
+                                                <button
+                                                    onClick={() => setConfirmPermanentDeleteId(conv.id)}
+                                                    className="flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--error-surface)] text-[var(--error-foreground)] border border-[var(--error-border)] text-[10px] font-bold hover:bg-[var(--error-surface)] transition-all cursor-pointer"
+                                                >
+                                                    <Trash2 size={11} />
+                                                    Permanent
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 ))
@@ -637,9 +696,9 @@ export default function InboxPage() {
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         {conv.priority && conv.priority !== "medium" && (
                                                             <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                                                conv.priority === "urgent" ? "bg-red-500" :
+                                                                conv.priority === "urgent" ? "bg-[var(--error)]" :
                                                                 conv.priority === "high" ? "bg-orange-400" :
-                                                                conv.priority === "low" ? "bg-emerald-500" :
+                                                                conv.priority === "low" ? "bg-[var(--success)]" :
                                                                 "bg-yellow-400"
                                                             }`} title={`Priority: ${conv.priority}`} />
                                                         )}
@@ -663,7 +722,7 @@ export default function InboxPage() {
                                                         <StatusDot status={conv.status} />
                                                         {isUnread && (
                                                             <span
-                                                                className="min-w-[18px] h-[18px] px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                                                                className="min-w-[18px] h-[18px] px-1 rounded-full text-foreground text-[9px] font-bold flex items-center justify-center"
                                                                 style={{ background: pColor }}
                                                             >
                                                                 {conv.unread}
@@ -675,25 +734,25 @@ export default function InboxPage() {
                                         </motion.div>
 
                                         {/* Action buttons - show on hover */}
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-[#1a1a2e] rounded-lg p-1 border border-white/10 z-10">
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-surface rounded-lg p-1 border border-border z-10">
                                             {/* Priority selector */}
                                             <select
                                                 value={conv.priority || "medium"}
                                                 onChange={(e) => handleUpdatePriority(conv.id, e.target.value)}
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-transparent text-gray-300 border border-white/10 cursor-pointer focus:outline-none"
+                                                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-transparent text-muted-foreground border border-border cursor-pointer focus:outline-none"
                                             >
-                                                <option value="low" className="bg-[#1a1a2e] text-white">🟢 Low</option>
-                                                <option value="medium" className="bg-[#1a1a2e] text-white">🟡 Medium</option>
-                                                <option value="high" className="bg-[#1a1a2e] text-white">🟠 High</option>
-                                                <option value="urgent" className="bg-[#1a1a2e] text-white">🔴 Urgent</option>
+                                                <option value="low" className="bg-surface text-foreground">🟢 Low</option>
+                                                <option value="medium" className="bg-surface text-foreground">🟡 Medium</option>
+                                                <option value="high" className="bg-surface text-foreground">🟠 High</option>
+                                                <option value="urgent" className="bg-surface text-foreground">🔴 Urgent</option>
                                             </select>
 
                                             {/* Delete button */}
                                             {isAdmin && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
-                                                    className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    className="p-1.5 text-muted-foreground hover:text-[var(--error-foreground)] hover:bg-[var(--error-surface)] rounded-lg transition-all"
                                                     title="Delete conversation"
                                                 >
                                                     <Trash2 size={13} />
@@ -758,8 +817,8 @@ export default function InboxPage() {
                             exit={{ opacity: 0 }}
                             className="flex-1 flex flex-col items-center justify-center gap-4 bg-[var(--background)]"
                         >
-                            <div className="w-20 h-20 rounded-3xl bg-[#6D4AE2]/10 border border-[#6D4AE2]/20 flex items-center justify-center">
-                                <Zap size={32} className="text-[#6D4AE2] opacity-70" />
+                            <div className="w-20 h-20 rounded-3xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                <Zap size={32} className="text-accent opacity-70" />
                             </div>
                             <div className="text-center">
                                 <h2 className="text-[16px] font-semibold text-[var(--text-primary)] mb-1">

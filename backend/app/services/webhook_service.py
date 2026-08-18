@@ -202,13 +202,25 @@ async def dispatch_auto_ai_reply(
             meta = integration.metadata_json or {}
         else:
             if customer.platform == "facebook":
-                access_token = settings.FACEBOOK_PAGE_ACCESS_TOKEN
+                access_token = (
+                    settings.FACEBOOK_PAGE_ACCESS_TOKEN
+                    if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+                )
             elif customer.platform == "instagram":
-                access_token = settings.FACEBOOK_PAGE_ACCESS_TOKEN
-                meta = {"page_id": settings.FACEBOOK_PAGE_ID}
+                access_token = (
+                    settings.FACEBOOK_PAGE_ACCESS_TOKEN
+                    if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+                )
+                meta = {"page_id": settings.FACEBOOK_PAGE_ID} if access_token else {}
             elif customer.platform == "whatsapp":
-                access_token = settings.WHATSAPP_ACCESS_TOKEN
-                meta = {"phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID}
+                access_token = (
+                    settings.WHATSAPP_ACCESS_TOKEN
+                    if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+                )
+                meta = (
+                    {"phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID}
+                    if access_token else {}
+                )
 
         # Dispatch via Messaging Service
         from app.services.messaging_service import MessagingService
@@ -226,11 +238,6 @@ async def dispatch_auto_ai_reply(
                     )
                     smtp_host = email_metadata.get("smtp_host", "smtp.gmail.com")
                     smtp_port = int(email_metadata.get("smtp_port", 587))
-                elif business_id == 1:
-                    from_email = settings.TECHSURU_IMAP_EMAIL
-                    from_password = settings.TECHSURU_IMAP_PASSWORD
-                    smtp_host = settings.MAIL_SERVER
-                    smtp_port = settings.MAIL_PORT
                 else:
                     from_email = None
                     from_password = None
@@ -240,16 +247,19 @@ async def dispatch_auto_ai_reply(
                     business = db.query(Business).filter(
                         Business.id == business_id
                     ).first()
+                    business_name = (
+                        (business.name or "").strip() if business else ""
+                    )
+                    support_name = (
+                        f"{business_name} Support" if business_name else "Support Team"
+                    )
                     sent = send_email_as_business(
                         to_email=customer_email,
-                        subject=reply_subject or "Re: TechSuru Support",
+                        subject=reply_subject or f"Re: {support_name}",
                         html_body=email_html(reply_text),
                         from_email=from_email,
                         from_password=from_password,
-                        from_name=(
-                            f"{business.name} Support"
-                            if business else "Customer Support"
-                        ),
+                        from_name=support_name,
                         smtp_host=smtp_host,
                         smtp_port=smtp_port,
                     )
@@ -266,8 +276,8 @@ async def dispatch_auto_ai_reply(
         else:
             if not access_token:
                 raise ValueError(
-                    f"No access token configured for {customer.platform} "
-                    f"(business_id={business_id})"
+                    f"Connect the business's {customer.platform} account before "
+                    "automatic messages can be sent"
                 )
             delivery_result = await messaging_service.send_message(
                 platform=customer.platform,
@@ -287,7 +297,8 @@ async def dispatch_auto_ai_reply(
             conversation_id=conversation_id,
             sender_type="agent",
             content=reply_text,
-            platform=customer.platform
+            platform=customer.platform,
+            ai_metadata={"response_mode": "auto"},
         )
         conv.last_read_at = datetime.now(timezone.utc)
         db.add(auto_msg)

@@ -12,7 +12,7 @@ from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.invitation import Invitation
 from app.models.user import User
-from app.routers import team
+from app.routers import auth, team
 
 
 client = TestClient(app)
@@ -93,6 +93,52 @@ def accept_invite(token, email, name="Permission Test Agent"):
             "password": PASSWORD,
         },
     )
+
+
+def test_google_invitation_creates_member_in_invited_business(tenant):
+    admin, admin_token = register_and_login_admin(tenant)
+    _, invitation_token = create_invite(admin_token, tenant["agent_email"])
+
+    db = SessionLocal()
+    try:
+        member = auth._accept_google_invitation(
+            db,
+            invitation_token,
+            tenant["agent_email"],
+            "Google Invite Agent",
+            f"google-{uuid4().hex}",
+            "https://example.com/avatar.png",
+        )
+        assert member.business_id == admin["business_id"]
+        assert member.role == "agent"
+        assert member.provider == "google"
+        assert member.email_verified is True
+        invitation = db.query(Invitation).filter(Invitation.token == invitation_token).one()
+        assert invitation.accepted is True
+    finally:
+        db.close()
+
+
+def test_google_invitation_rejects_a_different_google_email(tenant):
+    _, admin_token = register_and_login_admin(tenant)
+    _, invitation_token = create_invite(admin_token, tenant["agent_email"])
+
+    db = SessionLocal()
+    try:
+        with pytest.raises(ValueError, match="invite_email_mismatch"):
+            auth._accept_google_invitation(
+                db,
+                invitation_token,
+                tenant["wrong_email"],
+                "Wrong Google User",
+                f"google-{uuid4().hex}",
+                None,
+            )
+        invitation = db.query(Invitation).filter(Invitation.token == invitation_token).one()
+        assert invitation.accepted is False
+    finally:
+        db.rollback()
+        db.close()
 
 
 def test_db_backed_invitation_and_agent_permissions(tenant):

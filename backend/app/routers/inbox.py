@@ -167,7 +167,8 @@ async def get_messages(
 
 class ReplyRequest(BaseModel):
     content: str
-    subject: Optional[str] = "Re: Support from TechSuru"
+    subject: Optional[str] = None
+    ai_assisted: bool = False
 
 @router.post("/conversations/{conversation_id}/reply")
 async def reply_to_conversation(
@@ -177,8 +178,6 @@ async def reply_to_conversation(
     current_user: User = Depends(get_current_user)
 ):
     content = request.content
-    subject = request.subject or "Re: Support from TechSuru"
-
     conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -186,6 +185,14 @@ async def reply_to_conversation(
     # Ownership check
     if current_user.business_id and conv.business_id != current_user.business_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    business = db.query(Business).filter(Business.id == conv.business_id).first()
+    business_name = (business.name or "").strip() if business else ""
+    support_name = f"{business_name} Support" if business_name else "Support Team"
+    customer_support_name = (
+        f"{business_name} Customer Support" if business_name else "Support Team"
+    )
+    subject = request.subject or f"Re: Support from {business_name or 'Support Team'}"
 
     # rest of reply logic, use current_user.id as agent_id
     agent_id = current_user.id
@@ -220,18 +227,32 @@ async def reply_to_conversation(
         metadata = integration.metadata_json or {}
         print(f"[REPLY] Found integration for platform '{integration.platform}'.")
     else:
-        # Fallback to .env settings
-        print(f"[REPLY] No DB integration found — using .env fallback for platform '{customer.platform}'")
+        print(f"[REPLY] No DB integration found for platform '{customer.platform}'")
         if customer.platform == "facebook":
-            access_token = settings.FACEBOOK_PAGE_ACCESS_TOKEN
+            access_token = (
+                settings.FACEBOOK_PAGE_ACCESS_TOKEN
+                if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+            )
         elif customer.platform == "instagram":
             # CRITICAL: Use PAGE token, NOT the Instagram User token
-            access_token = settings.FACEBOOK_PAGE_ACCESS_TOKEN
-            metadata = {"page_id": settings.FACEBOOK_PAGE_ID}
-            print(f"[REPLY] Instagram reply using FACEBOOK_PAGE_ACCESS_TOKEN (not INSTAGRAM_ACCESS_TOKEN)")
+            access_token = (
+                settings.FACEBOOK_PAGE_ACCESS_TOKEN
+                if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+            )
+            metadata = (
+                {"page_id": settings.FACEBOOK_PAGE_ID} if access_token else {}
+            )
+            if access_token:
+                print("[REPLY] Explicit sandbox credential fallback enabled")
         elif customer.platform == "whatsapp":
-            access_token = settings.WHATSAPP_ACCESS_TOKEN
-            metadata = {"phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID}
+            access_token = (
+                settings.WHATSAPP_ACCESS_TOKEN
+                if settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX else None
+            )
+            metadata = (
+                {"phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID}
+                if access_token else {}
+            )
     
     print(f"[REPLY] Platform: {customer.platform} | Recipient IGSID/PSID: {customer.platform_user_id}")
 
@@ -247,11 +268,11 @@ async def reply_to_conversation(
         if customer_email and "@" in customer_email:
             credentials = get_business_email_credentials(db, conv.business_id)
             if not credentials:
-                send_error = "Business email not configured"
+                raise HTTPException(
+                    status_code=409,
+                    detail="Connect your email account before sending messages.",
+                )
             else:
-                business = db.query(Business).filter(
-                    Business.id == conv.business_id
-                ).first()
                 sent = send_email_as_business(
                     to_email=customer_email,
                     subject=subject,
@@ -260,27 +281,27 @@ async def reply_to_conversation(
                         <p style="font-size: 15px; line-height: 1.6; color: #333;">{content}</p>
                         <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
                         <p style="color: #888; font-size: 12px; margin-top: 12px;">
-                            Sent via HaqDesk AI · TechSuru Customer Support
+                            Sent via HaqDesk AI · {customer_support_name}
                         </p>
                     </div>
                     """,
                     from_email=credentials["email"],
                     from_password=credentials["password"],
-                    from_name=(
-                        f"{business.name} Support"
-                        if business else "Customer Support"
-                    ),
+                    from_name=support_name,
                     smtp_host=credentials["smtp_host"],
                     smtp_port=credentials["smtp_port"],
                 )
                 if not sent:
                     send_error = "Failed to send email reply"
         else:
-            send_error = "No valid email address for customer"
+            raise HTTPException(status_code=422, detail="Customer email address is invalid.")
     else:
         # Non-email platforms (Facebook, Instagram, WhatsApp)
         if not access_token:
-            raise HTTPException(status_code=400, detail=f"No active integration or fallback token found for {customer.platform}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Connect your {customer.platform} account before sending messages.",
+            )
 
         try:
             response = await messaging_service.send_message(
@@ -304,7 +325,11 @@ async def reply_to_conversation(
         sender_type="agent",
         sender_id=agent_id,
         content=content,
-        platform=customer.platform
+        platform=customer.platform,
+        ai_metadata={
+            "response_mode": "review",
+            "ai_assisted": request.ai_assisted,
+        },
     )
     conv.last_read_at = datetime.now(timezone.utc)
     db.add(new_message)
@@ -373,6 +398,38 @@ async def restore_conversation(
     db.commit()
 
     return {"message": "Conversation restored"}
+
+
+@router.delete("/conversations/{conversation_id}/permanent")
+async def permanently_delete_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_business_admin)
+):
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if current_user.business_id and conversation.business_id != current_user.business_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not conversation.is_deleted:
+        raise HTTPException(
+            status_code=400,
+            detail="Conversation must be moved to Deleted before permanent deletion"
+        )
+
+    # Messages reference the conversation without database-level cascade behavior.
+    db.query(Message).filter(Message.conversation_id == conversation_id).delete(
+        synchronize_session=False
+    )
+    db.delete(conversation)
+    db.commit()
+
+    return {"message": "Conversation permanently deleted"}
 
 
 @router.get("/conversations/deleted")

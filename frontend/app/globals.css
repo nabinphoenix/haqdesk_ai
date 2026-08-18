@@ -19,6 +19,7 @@
   --color-nav-bg: var(--nav-bg);
   --color-nav-border: var(--nav-border);
   --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
   --color-body-slate: var(--text-secondary);
   --font-heading: var(--font-outfit);
   --font-body: var(--font-jakarta);
@@ -32,6 +33,7 @@
   --text-primary: #1E293B;
   --text-secondary: #64748B;
   --accent: #6D4AE2;
+  --on-accent: #FFFFFF;
   --accent-glow: #818CF8;
   --success: #10B981;
   --success-foreground: #047857;
@@ -86,6 +88,7 @@
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --accent: #6D4AE2;
+  --on-accent: #FFFFFF;
   --accent-glow: #818CF8;
   --success: #10B981;
   --success-foreground: #6EE7B7;
@@ -359,10 +362,10 @@ select option {
 
 .ds-button:active:not(:disabled) { transform: scale(0.98); }
 .ds-button:disabled { cursor: not-allowed; opacity: 0.6; }
-.ds-button-primary { background: var(--accent); color: #fff; }
-.ds-button-primary:hover:not(:disabled) { background: #5B3BC7; }
+.ds-button-primary { background: var(--accent); color: var(--on-accent); }
+.ds-button-primary:hover:not(:disabled) { background: var(--accent-hover); }
 .ds-button-secondary { border: 1px solid var(--border); background: var(--surface-wash); color: var(--text-primary); }
-.ds-button-danger { background: var(--error); color: #fff; }
+.ds-button-danger { background: var(--error); color: var(--on-accent); }
 
 .ds-card {
   border: 1px solid var(--border);

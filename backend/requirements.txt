@@ -6,7 +6,6 @@ python-multipart
 # Database
 sqlalchemy
 psycopg2-binary
-alembic
 
 # Authentication
 python-jose[cryptography]
@@ -15,18 +14,12 @@ bcrypt==4.0.1
 authlib
 httpx
 itsdangerous
+cryptography
+starlette
 
 # AI / RAG pipeline
-langchain
-langchain-community
-langchain-huggingface
-langchain-groq
-langchain-text-splitters
 sentence-transformers
-groq
 litellm
-pypdf
-python-docx
 pymupdf
 langdetect
 qdrant-client
@@ -35,18 +28,12 @@ qdrant-client
 transformers
 torch
 
-# Queue / background jobs
-celery
-redis
-
 # Utilities
-python-dotenv
 pydantic
 pydantic-settings
-requests
 fastapi-mail
 
 # Testing
 pytest
 pytest-asyncio
-httpx
+pypdf

@@ -1,20 +1,25 @@
-import imaplib
 from app.core.config import settings
+from app.services.credential_service import get_sandbox_channel_credentials
 
-def test_imap_connection():
-    try:
-        mail = imaplib.IMAP4_SSL(settings.TECHSURU_IMAP_HOST, settings.TECHSURU_IMAP_PORT)
-        mail.login(settings.TECHSURU_IMAP_EMAIL, settings.TECHSURU_IMAP_PASSWORD)
-        mail.select("inbox")
-        status, messages = mail.search(None, "UNSEEN")
-        count = len(messages[0].split()) if messages[0] else 0
-        print(f"IMAP connection successful!")
-        print(f"Unread emails in inbox: {count}")
-        mail.logout()
-        return True
-    except Exception as e:
-        print(f"IMAP connection failed: {e}")
-        return False
 
-if __name__ == "__main__":
-    test_imap_connection()
+def test_global_channel_credentials_require_explicit_sandbox_opt_in(monkeypatch):
+    monkeypatch.setattr(
+        settings, "ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX", False
+    )
+    monkeypatch.setattr(settings, "WHATSAPP_ACCESS_TOKEN", "placeholder-token")
+    monkeypatch.setattr(settings, "WHATSAPP_PHONE_NUMBER_ID", "placeholder-number")
+
+    assert get_sandbox_channel_credentials("whatsapp") is None
+
+
+def test_explicit_sandbox_opt_in_can_use_placeholder_credentials(monkeypatch):
+    monkeypatch.setattr(
+        settings, "ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX", True
+    )
+    monkeypatch.setattr(settings, "WHATSAPP_ACCESS_TOKEN", "placeholder-token")
+    monkeypatch.setattr(settings, "WHATSAPP_PHONE_NUMBER_ID", "placeholder-number")
+
+    assert get_sandbox_channel_credentials("whatsapp") == {
+        "access_token": "placeholder-token",
+        "metadata": {"phone_number_id": "placeholder-number"},
+    }

@@ -129,13 +129,13 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
         }
     };
 
-    if (!profile) return <div className="p-8 text-center text-sm text-slate-400">Loading profile...</div>;
+    if (!profile) return <div className="p-8 text-center text-sm text-muted-foreground">Loading profile...</div>;
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent overflow-hidden relative font-jakarta">
             {/* Header */}
             <div className="p-6 pb-4 border-b border-surface-border text-center relative">
-                <div className="w-16 h-16 rounded-2xl bg-[#6D4AE2]/20 border border-surface-border flex items-center justify-center font-black text-2xl text-[#818CF8] shadow-sm mb-3 mx-auto overflow-hidden relative">
+                <div className="w-16 h-16 rounded-2xl bg-accent/20 border border-surface-border flex items-center justify-center font-black text-2xl text-accent-glow shadow-sm mb-3 mx-auto overflow-hidden relative">
                     {profile.avatar_url ? (
                         <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
@@ -147,14 +147,14 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                     </div>
                 </div>
 
-                <h2 className="text-[15px] font-bold text-white tracking-tight text-center">
+                <h2 className="text-[15px] font-bold text-foreground tracking-tight text-center">
                     {profile.display_name || "Customer"}
                 </h2>
-                <p className="text-[11px] text-gray-400 text-center mt-0.5 uppercase tracking-wider">
+                <p className="text-[11px] text-muted-foreground text-center mt-0.5 uppercase tracking-wider">
                     {(platform || profile.platforms[0])} · Customer
                 </p>
                 {conv?.platform === "email" && conv?.customer_email && (
-                    <p className="text-[11px] text-gray-400 mt-0.5 flex items-center justify-center gap-1">
+                    <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
                         <Mail size={10} />
                         {conv.customer_email}
                     </p>
@@ -163,7 +163,7 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                 {/* Platform Badges */}
                 <div className="flex items-center justify-center gap-1">
                     {profile.platforms.map(p => (
-                        <div key={p} className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center border border-surface-border">
+                        <div key={p} className="w-6 h-6 rounded-md bg-surface-wash flex items-center justify-center border border-surface-border">
                             <SocialIcon platform={p as any} className="w-4 h-4" />
                         </div>
                     ))}
@@ -175,18 +175,18 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                 {/* Contact Info (if available) */}
                 {(profile.phone || profile.email) && (
                     <div className="space-y-3">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#818CF8]">Contact Info</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-glow">Contact Info</span>
                         <div className="space-y-2">
                             {profile.phone && (
-                                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-surface-border">
-                                    <Phone className="w-4 h-4 text-gray-400" />
-                                    <span className="text-[12px] font-medium text-white">{profile.phone}</span>
+                                <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-wash border border-surface-border">
+                                    <Phone className="w-4 h-4 text-muted-foreground" />
+                                    <span className="text-[12px] font-medium text-foreground">{profile.phone}</span>
                                 </div>
                             )}
                             {profile.email && (
-                                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-surface-border">
-                                    <Mail className="w-4 h-4 text-gray-400" />
-                                    <span className="text-[12px] font-medium text-white truncate">{profile.email}</span>
+                                <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-wash border border-surface-border">
+                                    <Mail className="w-4 h-4 text-muted-foreground" />
+                                    <span className="text-[12px] font-medium text-foreground truncate">{profile.email}</span>
                                 </div>
                             )}
                         </div>
@@ -196,12 +196,12 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                 {/* Linked Accounts */}
                 {profile.linked_accounts.length > 0 && (
                     <div className="space-y-3">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#818CF8]">Linked Identities</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-glow">Linked Identities</span>
                         <div className="space-y-2">
                             {profile.linked_accounts.map(acc => (
-                                <div key={acc.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-surface-border">
+                                <div key={acc.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface-wash border border-surface-border">
                                     <SocialIcon platform={acc.platform as any} className="w-5 h-5" />
-                                    <span className="text-[11px] font-bold text-slate-900 dark:text-white">{acc.display_name}</span>
+                                    <span className="text-[11px] font-bold text-foreground dark:text-foreground">{acc.display_name}</span>
                                 </div>
                             ))}
                         </div>
@@ -211,10 +211,10 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                 {/* Notes Section */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#818CF8]">Agent Notes</span>
-                        <button onClick={handleSaveNotes} disabled={isSaving} className="text-[#818CF8] hover:text-slate-900 dark:text-white transition-colors">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-glow">Agent Notes</span>
+                        <button onClick={handleSaveNotes} disabled={isSaving} className="text-accent-glow hover:text-foreground dark:text-foreground transition-colors">
                             {isSaving ? (
-                                <div className="w-3.5 h-3.5 border-2 border-[#818CF8] border-t-transparent rounded-full animate-spin" />
+                                <div className="w-3.5 h-3.5 border-2 border-accent-glow border-t-transparent rounded-full animate-spin" />
                             ) : (
                                 <Save size={14} />
                             )}
@@ -224,24 +224,24 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="Add notes about this customer..."
-                        className="w-full h-24 p-3 rounded-xl bg-white/5 border border-surface-border text-[12px] text-slate-900 dark:text-white placeholder-slate-500 font-medium outline-none focus:bg-white/[0.08] focus:border-[#818CF8]/30 transition-all resize-none"
+                        className="w-full h-24 p-3 rounded-xl bg-surface-wash border border-surface-border text-[12px] text-foreground dark:text-foreground placeholder-slate-500 font-medium outline-none focus:bg-surface/[0.08] focus:border-accent-glow/30 transition-all resize-none"
                     />
                 </div>
 
                 {/* Conversation History */}
                 <div className="space-y-3">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#818CF8]">History ({conversations.length})</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-glow">History ({conversations.length})</span>
                     <div className="space-y-2">
                         {conversations.map(conv => (
-                            <div key={conv.id} className="p-3 rounded-xl border border-surface-border hover:bg-white/5 transition-all cursor-pointer">
+                            <div key={conv.id} className="p-3 rounded-xl border border-surface-border hover:bg-surface-wash transition-all cursor-pointer">
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-2">
                                         <SocialIcon platform={conv.platform as any} className="w-3 h-3" />
-                                        <span className="text-[10px] font-bold text-slate-900 dark:text-white uppercase">Conv #{conv.id}</span>
+                                        <span className="text-[10px] font-bold text-foreground dark:text-foreground uppercase">Conv #{conv.id}</span>
                                     </div>
-                                    <span className="text-[9px] font-bold text-slate-400">{new Date(conv.time).toLocaleDateString()}</span>
+                                    <span className="text-[9px] font-bold text-muted-foreground">{new Date(conv.time).toLocaleDateString()}</span>
                                 </div>
-                                <p className="text-[11px] text-slate-400 truncate">{conv.last_message || "Started"}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">{conv.last_message || "Started"}</p>
                             </div>
                         ))}
                     </div>
@@ -252,7 +252,7 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
             <div className="p-6 border-t border-surface-border bg-transparent">
                 <button 
                     onClick={() => setShowLinkModal(true)}
-                    className="w-full py-4 border border-[#6D4AE2] text-white hover:bg-[#6D4AE2] hover:shadow-lg rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 bg-[#6D4AE2]/10"
+                    className="w-full py-4 border border-accent text-on-accent hover:bg-accent hover:shadow-lg rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-95 bg-accent/10"
                 >
                     <LinkIcon size={16} strokeWidth={2.5} />
                     Link Account
@@ -263,23 +263,23 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
             {showLinkModal && (
                 <div className="absolute inset-0 bg-background/95 backdrop-blur-md z-50 flex flex-col p-6 border border-surface-border rounded-[1.5rem] overflow-y-auto custom-scrollbar">
                     <div className="flex justify-between items-center mb-5 shrink-0">
-                        <h3 className="text-sm font-black text-white uppercase tracking-wider">Create & Link</h3>
+                        <h3 className="text-sm font-black text-foreground uppercase tracking-wider">Create & Link</h3>
                         <button
                             onClick={() => { setShowLinkModal(false); setManualName(""); setManualPhone(""); setManualEmail(""); }}
-                            className="text-slate-400 hover:text-white font-bold text-lg"
+                            className="text-muted-foreground hover:text-foreground font-bold text-lg"
                         >
                             &times;
                         </button>
                     </div>
 
-                    <p className="text-[11px] text-gray-400 mb-5 text-center leading-relaxed shrink-0">
+                    <p className="text-[11px] text-muted-foreground mb-5 text-center leading-relaxed shrink-0">
                         Enter details to create a master customer record and link it to this social account.
                     </p>
 
                     <form onSubmit={handleManualLink} className="space-y-4 shrink-0">
                         <div>
-                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5 ml-1">
-                                Full Name <span className="text-red-400">*</span>
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1.5 ml-1">
+                                Full Name <span className="text-[var(--error-foreground)]">*</span>
                             </label>
                             <input
                                 type="text"
@@ -287,12 +287,12 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                                 value={manualName}
                                 onChange={(e) => setManualName(e.target.value)}
                                 placeholder="e.g. John Doe"
-                                className="w-full p-3 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-500 focus:border-purple-500 focus:outline-none transition-all"
+                                className="w-full p-3 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] placeholder:text-muted-foreground focus:border-accent focus:outline-none transition-all"
                             />
                         </div>
                         
                         <div>
-                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5 ml-1">
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1.5 ml-1">
                                 Phone Number (Optional)
                             </label>
                             <input
@@ -300,12 +300,12 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                                 value={manualPhone}
                                 onChange={(e) => setManualPhone(e.target.value)}
                                 placeholder="+1 234 567 890"
-                                className="w-full p-3 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-500 focus:border-purple-500 focus:outline-none transition-all"
+                                className="w-full p-3 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] placeholder:text-muted-foreground focus:border-accent focus:outline-none transition-all"
                             />
                         </div>
                         
                         <div>
-                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5 ml-1">
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1.5 ml-1">
                                 Email Address (Optional)
                             </label>
                             <input
@@ -313,7 +313,7 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                                 value={manualEmail}
                                 onChange={(e) => setManualEmail(e.target.value)}
                                 placeholder="john@example.com"
-                                className="w-full p-3 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-500 focus:border-purple-500 focus:outline-none transition-all"
+                                className="w-full p-3 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] placeholder:text-muted-foreground focus:border-accent focus:outline-none transition-all"
                             />
                         </div>
 
@@ -321,10 +321,10 @@ export default function CustomerSidebar({ customerId, platform, conv }: Customer
                             <button 
                                 type="submit"
                                 disabled={isLinking || !manualName.trim()}
-                                className="w-full py-3.5 bg-[#6D4AE2] text-white rounded-xl text-[12px] font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5b3cc4] transition-all flex justify-center items-center gap-2"
+                                className="w-full py-3.5 bg-accent text-on-accent rounded-xl text-[12px] font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#5b3cc4] transition-all flex justify-center items-center gap-2"
                             >
                                 {isLinking ? (
-                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                    <div className="w-4 h-4 border-2 border-border border-t-white rounded-full animate-spin" />
                                 ) : (
                                     <>
                                         <Save size={14} />

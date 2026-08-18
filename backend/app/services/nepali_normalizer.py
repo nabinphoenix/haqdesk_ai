@@ -108,7 +108,7 @@ def normalize_nepali_text(text: str) -> str:
 
 def get_embedding_input(text: str) -> str:
     """
-    Builds dual-language embedding input string for BAAI/bge-m3 model.
+    Builds dual-language embedding input string for the multilingual embedding model.
     Preserves original text and appends normalized Devanagari text.
     
     Example:

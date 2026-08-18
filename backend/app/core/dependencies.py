@@ -57,3 +57,25 @@ def require_super_admin(
             detail="Super administrator access required",
         )
     return current_user
+
+
+def require_business_analytics(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Allow tenant-wide analytics only to business admins and supervisors."""
+    if current_user.role == "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business analytics require an authenticated business context",
+        )
+    if current_user.role not in ("business_admin", "supervisor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business analytics access requires an admin or supervisor role",
+        )
+    if not current_user.business_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No business associated with this account",
+        )
+    return current_user

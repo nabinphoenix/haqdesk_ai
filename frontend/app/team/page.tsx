@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Users, UserPlus, Trash2, X, Mail,
+  Users, UserPlus, Trash2, X,
   ChevronDown, Clock, MessageCircle,
-  CheckCircle2, Zap, Bot, Shield, Copy, ExternalLink,
+  CheckCircle2, Zap, Bot, ShieldCheck, Copy, FileCheck2, ScanEye, Timer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithAuth } from "@/lib/api";
@@ -20,11 +20,35 @@ interface TeamMember {
   conversations: number;
   avgResponse: string;
   joinedAt: string;
+  responses: number;
 }
 
+interface TeamSummary {
+  avgResponseSeconds: number | null;
+  autoAvgResponseSeconds: number | null;
+  reviewAvgResponseSeconds: number | null;
+  aiDraftsUsed: number;
+  rolesActive: number;
+}
+
+const EMPTY_SUMMARY: TeamSummary = {
+  avgResponseSeconds: null,
+  autoAvgResponseSeconds: null,
+  reviewAvgResponseSeconds: null,
+  aiDraftsUsed: 0,
+  rolesActive: 0,
+};
+
+const formatDuration = (seconds: number | null | undefined) => {
+  if (seconds === null || seconds === undefined) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+};
+
 const STATUS_DOT: Record<TeamMember["status"], string> = {
-  online: "bg-emerald-500",
-  offline: "bg-slate-500",
+  online: "bg-[var(--success)]",
+  offline: "bg-background0",
   away: "bg-amber-400",
 };
 
@@ -35,9 +59,9 @@ const STATUS_LABEL: Record<TeamMember["status"], string> = {
 };
 
 const ROLE_STYLE: Record<TeamMember["role"], string> = {
-  Admin: "text-[#818CF8] bg-[#818CF8]/10 border-[#818CF8]/20",
-  Supervisor: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-  Agent: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  Admin: "text-accent-glow bg-accent-glow/10 border-accent-glow/20",
+  Supervisor: "text-accent-glow bg-accent/10 border-accent/20",
+  Agent: "text-[var(--success-foreground)] bg-[var(--success-surface)] border-[var(--success-border)]",
 };
 
 // Map backend role strings to frontend display roles
@@ -66,61 +90,53 @@ export default function TeamPage() {
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
 
-  const [aiDraftsCount, setAiDraftsCount] = useState(0);
+  const [summary, setSummary] = useState<TeamSummary>(EMPTY_SUMMARY);
   const isAdmin = userRole === "business_admin" || userRole === "super_admin";
 
   useEffect(() => {
     setUserRole(localStorage.getItem("userRole"));
   }, []);
 
-  // Fetch team members, conversations, and analytics from API on mount
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        const [membersRes, conversationsRes, analyticsRes] = await Promise.all([
-          fetchWithAuth("/api/v1/team/members"),
-          fetchWithAuth("/api/v1/inbox/conversations"),
-          fetchWithAuth("/api/v1/analytics/summary")
-        ]);
-
-        let convs: any[] = [];
-        if (conversationsRes.ok) {
-          convs = await conversationsRes.json();
-        }
-
-        if (analyticsRes.ok) {
-          const summary = await analyticsRes.json();
-          setAiDraftsCount(summary.ai_drafts_generated || 0);
-        }
-
-        if (membersRes.ok) {
-          const data = await membersRes.json();
-          setMembers(
-            data.map((m: any) => {
-              // Count conversations assigned to this member
-              const memberConvsCount = convs.filter((c: any) => c.assigned_agent_id === m.id).length;
-
-              return {
-                id: m.id,
-                name: m.name || "Unknown",
-                email: m.email,
-                role: mapRole(m.role),
-                status: (m.status as TeamMember["status"]) || "offline",
-                conversations: memberConvsCount,
-                avgResponse: "—",
-                joinedAt: m.created_at
-                  ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
-                  : "—",
-              };
-            })
-          );
-        }
-      } catch (err) {
-        console.error("Failed to fetch data", err);
-      }
-    };
-    fetchAllData();
+  const fetchTeamMetrics = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth("/api/v1/team/metrics", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      setMembers(data.members.map((m: {
+        id: number; name?: string; email: string; role: string;
+        status?: TeamMember["status"]; conversations?: number;
+        avg_response_seconds?: number | null; responses?: number; created_at?: string;
+      }) => ({
+        id: m.id,
+        name: m.name || "Unknown",
+        email: m.email,
+        role: mapRole(m.role),
+        status: m.status || "offline",
+        conversations: m.conversations || 0,
+        avgResponse: formatDuration(m.avg_response_seconds),
+        responses: m.responses || 0,
+        joinedAt: m.created_at
+          ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+          : "—",
+      })));
+      const metrics = data.summary || {};
+      setSummary({
+        avgResponseSeconds: metrics.avg_response_seconds ?? null,
+        autoAvgResponseSeconds: metrics.auto_avg_response_seconds ?? null,
+        reviewAvgResponseSeconds: metrics.review_avg_response_seconds ?? null,
+        aiDraftsUsed: metrics.ai_drafts_used || 0,
+        rolesActive: metrics.roles_active || 0,
+      });
+    } catch (err) {
+      console.error("Failed to fetch team metrics", err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchTeamMetrics();
+    const interval = window.setInterval(fetchTeamMetrics, 15000);
+    return () => window.clearInterval(interval);
+  }, [fetchTeamMetrics]);
 
   const onlineCount = members.filter((m) => m.status === "online").length;
 
@@ -196,14 +212,14 @@ export default function TeamPage() {
     toast.success("Invite link copied!");
   };
 
-  const roleCount = new Set(members.map((m) => m.role)).size;
-
   const stats = [
-    { label: "Total Members", value: members.length.toString(), icon: Users, color: "#818CF8" },
-    { label: "Online Now", value: onlineCount.toString(), icon: CheckCircle2, color: "#10B981" },
-    { label: "Avg Response", value: "—", icon: Clock, color: "#06B6D4" },
-    { label: "AI Drafts Used", value: aiDraftsCount.toLocaleString(), icon: Bot, color: "#F59E0B" },
-    { label: "Roles Active", value: roleCount.toString(), icon: Shield, color: "#818CF8" },
+    { label: "Total Members", value: members.length.toString(), icon: Users, color: "var(--accent-glow)" },
+    { label: "Online Now", value: onlineCount.toString(), icon: CheckCircle2, color: "var(--success)" },
+    { label: "Avg Response", value: formatDuration(summary.avgResponseSeconds), icon: Timer, color: "var(--teal)" },
+    { label: "Auto Mode Avg", value: formatDuration(summary.autoAvgResponseSeconds), icon: Bot, color: "var(--success)" },
+    { label: "Review Mode Avg", value: formatDuration(summary.reviewAvgResponseSeconds), icon: ScanEye, color: "var(--warning)" },
+    { label: "AI Drafts Used", value: summary.aiDraftsUsed.toLocaleString(), icon: FileCheck2, color: "var(--warning)" },
+    { label: "Roles Active", value: summary.rolesActive.toString(), icon: ShieldCheck, color: "var(--accent-glow)" },
   ];
 
   return (
@@ -232,7 +248,7 @@ export default function TeamPage() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-surface-border rounded-lg text-[#818CF8] text-[9px] font-black uppercase tracking-widest mb-3"
+                className="inline-flex items-center gap-2 px-3 py-1 bg-surface-wash border border-surface-border rounded-lg text-accent-glow text-[9px] font-black uppercase tracking-widest mb-3"
               >
                 <Zap size={12} strokeWidth={3} />
                 Live
@@ -245,7 +261,7 @@ export default function TeamPage() {
             {isAdmin && (
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95"
+                className="flex items-center gap-2.5 px-6 py-3 bg-accent text-on-accent rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95"
               >
                 <UserPlus size={16} strokeWidth={2.5} />
                 Invite Member
@@ -257,18 +273,18 @@ export default function TeamPage() {
         <div className="page-body custom-scrollbar">
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-4 mb-8">
             {stats.map((stat, i) => (
               <motion.div
                 key={stat.label}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.07 }}
-                className="p-4 rounded-2xl bg-white/5 border border-surface-border hover:border-[#818CF8]/20 transition-all group"
+                className="p-4 rounded-2xl bg-surface-wash border border-surface-border hover:border-accent-glow/20 transition-all group"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <div
-                    className="p-2 bg-white/5 border border-surface-border rounded-lg group-hover:bg-[#6D4AE2] group-hover:text-white transition-all"
+                    className="p-2 bg-surface-wash border border-surface-border rounded-lg group-hover:bg-accent group-hover:text-on-accent transition-all"
                     style={{ color: stat.color }}
                   >
                     <stat.icon size={14} strokeWidth={2.5} />
@@ -286,9 +302,9 @@ export default function TeamPage() {
           <div className="rounded-2xl border border-surface-border overflow-hidden">
 
             {/* Table header */}
-            <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-3 bg-white/[0.02] border-b border-surface-border">
+            <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-3 bg-surface-wash border-b border-surface-border">
               {["Member", "Email", "Role", "Chats", "Avg. Response", ""].map((h) => (
-                <span key={h} className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-500">{h}</span>
+                <span key={h} className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">{h}</span>
               ))}
             </div>
 
@@ -301,19 +317,19 @@ export default function TeamPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 8 }}
                   transition={{ delay: i * 0.04 }}
-                  className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] transition-all items-center group"
+                  className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-4 border-b border-border hover:bg-surface-wash transition-all items-center group"
                 >
                   {/* Name */}
                   <div className="flex items-center gap-3">
                     <div className="relative shrink-0">
-                      <div className="w-8 h-8 rounded-full bg-[#6D4AE2]/20 border border-[#6D4AE2]/30 flex items-center justify-center font-black text-[10px] text-[#818CF8]">
+                      <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center font-black text-[10px] text-accent-glow">
                         {member.name.substring(0, 2).toUpperCase()}
                       </div>
                       <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--surface)] ${STATUS_DOT[member.status]}`} />
                     </div>
                     <div>
                       <p className="text-[13px] font-bold text-foreground leading-tight">{member.name}</p>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{STATUS_LABEL[member.status]}</p>
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{STATUS_LABEL[member.status]}</p>
                     </div>
                   </div>
 
@@ -327,21 +343,21 @@ export default function TeamPage() {
 
                   {/* Conversations */}
                   <div className="flex items-center gap-1.5">
-                    <MessageCircle size={11} className="text-slate-500 shrink-0" />
+                    <MessageCircle size={11} className="text-muted-foreground shrink-0" />
                     <span className="text-[13px] font-bold text-foreground">{member.conversations}</span>
                   </div>
 
                   {/* Avg Response */}
                   <div className="flex items-center gap-1.5">
-                    <Clock size={11} className="text-slate-500 shrink-0" />
-                    <span className="text-[13px] font-medium text-slate-300">{member.avgResponse}</span>
+                    <Clock size={11} className="text-muted-foreground shrink-0" />
+                    <span className="text-[13px] font-medium text-muted-foreground">{member.avgResponse}</span>
                   </div>
 
                   {/* Remove */}
                   {isAdmin && (
                     <button
                       onClick={() => handleRemove(member.id)}
-                      className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      className="p-1.5 text-muted-foreground hover:text-[var(--error-foreground)] hover:bg-red-950/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 size={13} strokeWidth={2} />
                     </button>
@@ -351,7 +367,7 @@ export default function TeamPage() {
             </AnimatePresence>
 
             {members.length === 0 && (
-              <div className="py-16 flex flex-col items-center gap-3 text-slate-500">
+              <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
                 <Users size={32} strokeWidth={1.5} />
                 <p className="text-[11px] font-black uppercase tracking-widest">No team members yet</p>
               </div>
@@ -375,18 +391,18 @@ export default function TeamPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1a1a2e] shadow-2xl p-8"
+              className="w-full max-w-md rounded-2xl border border-border bg-surface shadow-2xl p-8"
             >
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-lg font-black tracking-tight text-white">Invite Member</h2>
+                  <h2 className="text-lg font-black tracking-tight text-foreground">Invite Member</h2>
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
                     Send an invite to join your support team.
                   </p>
                 </div>
                 <button
                   onClick={handleCloseInviteModal}
-                  className="p-1.5 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-wash rounded-lg transition-all"
                 >
                   <X size={16} />
                 </button>
@@ -396,23 +412,23 @@ export default function TeamPage() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="py-6 flex flex-col items-center gap-4 text-emerald-400"
+                  className="py-6 flex flex-col items-center gap-4 text-[var(--success-foreground)]"
                 >
                   <CheckCircle2 size={40} strokeWidth={1.5} />
                   <p className="text-sm font-black uppercase tracking-widest">Invite Sent!</p>
                   {inviteUrl && (
                     <div className="w-full mt-2">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">Share this link</p>
-                      <div className="flex items-center gap-2 p-3 rounded-xl border border-white/10 bg-white/5">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 text-center">Share this link</p>
+                      <div className="flex items-center gap-2 p-3 rounded-xl border border-border bg-surface-wash">
                         <input
                           type="text"
                           value={inviteUrl}
                           readOnly
-                          className="flex-1 bg-transparent text-[11px] text-slate-300 outline-none truncate"
+                          className="flex-1 bg-transparent text-[11px] text-muted-foreground outline-none truncate"
                         />
                         <button
                           onClick={copyInviteUrl}
-                          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-wash rounded-lg transition-all"
                           title="Copy link"
                         >
                           <Copy size={14} />
@@ -422,7 +438,7 @@ export default function TeamPage() {
                   )}
                   <button
                     onClick={handleCloseInviteModal}
-                    className="mt-2 px-6 py-2 rounded-xl border border-white/10 bg-white/5 text-white text-[11px] font-black uppercase tracking-wider hover:bg-white/10 transition-all"
+                    className="mt-2 px-6 py-2 rounded-xl border border-border bg-surface-wash text-foreground text-[11px] font-black uppercase tracking-wider hover:bg-surface-wash transition-all"
                   >
                     Done
                   </button>
@@ -430,30 +446,30 @@ export default function TeamPage() {
               ) : (
                 <form onSubmit={handleGenerateInviteLink} className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Agent Email</label>
+                    <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Agent Email</label>
                     <input
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] placeholder-gray-600 focus:border-purple-500 focus:outline-none transition-all"
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] placeholder:text-muted-foreground focus:border-accent focus:outline-none transition-all"
                       placeholder="agent@example.com"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Role</label>
+                    <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Role</label>
                     <div className="relative">
                       <select
                         value={inviteRole}
                         onChange={(e) => setInviteRole(e.target.value as TeamMember["role"])}
-                        className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[13px] focus:border-purple-500 focus:outline-none transition-all appearance-none"
+                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface-wash text-foreground text-[13px] focus:border-accent focus:outline-none transition-all appearance-none"
                       >
                         <option value="Agent">Agent</option>
                         <option value="Supervisor">Supervisor</option>
                         <option value="Admin">Admin</option>
                       </select>
-                      <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                      <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     </div>
                   </div>
 
@@ -461,17 +477,17 @@ export default function TeamPage() {
                     <button
                       type="button"
                       onClick={handleCloseInviteModal}
-                      className="flex-1 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-[11px] font-black uppercase tracking-wider hover:bg-white/10 transition-all"
+                      className="flex-1 py-2.5 rounded-xl border border-border bg-surface-wash text-foreground text-[11px] font-black uppercase tracking-wider hover:bg-surface-wash transition-all"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={generatingLink}
-                      className="flex-1 py-2.5 rounded-xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                      className="flex-1 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-on-accent text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                     >
                       {generatingLink ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3.5 h-3.5 border-2 border-on-accent border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <>
                           <UserPlus size={13} strokeWidth={2.5} />

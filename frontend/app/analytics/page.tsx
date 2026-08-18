@@ -1,208 +1,156 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { MessageCircle, Bot, Clock, Target, TrendingUp, Zap, BarChart3, Activity, Users } from "lucide-react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { BarChart3, LayoutDashboard, Radio, Users } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api";
+import AnalyticsEmptyState from "./components/AnalyticsEmptyState";
+import AnalyticsErrorState from "./components/AnalyticsErrorState";
+import AnalyticsFilterBar from "./components/AnalyticsFilterBar";
+import AnalyticsPageHeader from "./components/AnalyticsPageHeader";
+import AnalyticsSkeleton from "./components/AnalyticsSkeleton";
+import DataQualityBanner from "./components/DataQualityBanner";
+import KpiGrid from "./components/KpiGrid";
+import MessageVolumeChart from "./components/MessageVolumeChart";
+import PlatformAnalyticsSection from "./components/PlatformAnalyticsSection";
+import CustomerAnalyticsSection from "./components/CustomerAnalyticsSection";
+import { useAnalyticsFilters } from "./hooks/useAnalyticsFilters";
+import type { AnalyticsSummary, CustomerActivityResponse, CustomerAttentionResponse, CustomerSummary, MessageTrend, PlatformAnalytics } from "./types";
 
-export default function AnalyticsDashboard() {
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
+export default function AnalyticsPage() {
+  return <Suspense fallback={<div className="page-padded"><AnalyticsSkeleton /></div>}><AnalyticsContent /></Suspense>;
+}
+
+function AnalyticsContent() {
+  type AnalyticsView = "overview" | "channels" | "customers" | "trends";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedView = searchParams.get("view");
+  const activeView: AnalyticsView = ["overview", "channels", "customers", "trends"].includes(requestedView || "") ? requestedView as AnalyticsView : "overview";
+  const setActiveView = (view: AnalyticsView) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", view);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+  const { filters, setFilter, resetFilters, queryString } = useAnalyticsFilters();
+  const [agentOptions, setAgentOptions] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [trend, setTrend] = useState<MessageTrend | null>(null);
+  const [platforms, setPlatforms] = useState<PlatformAnalytics | null>(null);
+  const [customerSummary, setCustomerSummary] = useState<CustomerSummary | null>(null);
+  const [activeCustomers, setActiveCustomers] = useState<CustomerActivityResponse | null>(null);
+  const [attentionCustomers, setAttentionCustomers] = useState<CustomerAttentionResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
+  const [exportError, setExportError] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        const res = await fetchWithAuth("/api/v1/analytics/summary");
-        if (res.ok) {
-          const data = await res.json();
-          setAnalyticsData(data);
+    let active = true;
+    void fetchWithAuth("/api/v1/team/members", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : [])
+      .then((members: unknown) => {
+        if (active && Array.isArray(members)) {
+          setAgentOptions(members.filter((member): member is { id: number; name: string; email: string } =>
+            typeof member?.id === "number" && typeof member?.email === "string"
+          ));
         }
-      } catch (e) {
-        console.error("Failed to fetch analytics", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnalytics();
+      })
+      .catch(() => {
+        // Analytics remains usable if the optional agent-name list cannot load.
+      });
+    return () => { active = false; };
   }, []);
 
-  const kpis = analyticsData ? [
-    { label: "Total Messages", value: analyticsData.total_messages.toLocaleString(), delta: "All time", icon: MessageCircle, color: "#818CF8" },
-    { label: "AI Drafts Generated", value: analyticsData.ai_drafts_generated.toLocaleString(), delta: "All time", icon: Bot, color: "#06B6D4" },
-    { label: "Total Conversations", value: analyticsData.total_conversations.toLocaleString(), delta: `${analyticsData.open_conversations} open`, icon: Activity, color: "#10B981" },
-    { label: "Total Customers", value: analyticsData.total_customers.toLocaleString(), delta: "Across all platforms", icon: Users, color: "#F59E0B" },
-  ] : [];
+  const loadAnalytics = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true); else setLoading(true);
+    setError("");
+    try {
+      const [summaryResponse, trendResponse, platformsResponse, customerSummaryResponse, activeCustomersResponse, attentionCustomersResponse] = await Promise.all([
+        fetchWithAuth(`/api/v1/analytics/summary?${queryString}`, { cache: "no-store" }),
+        fetchWithAuth(`/api/v1/analytics/message-trend?${queryString}`, { cache: "no-store" }),
+        fetchWithAuth(`/api/v1/analytics/platforms?${queryString}`, { cache: "no-store" }),
+        fetchWithAuth(`/api/v1/analytics/customers/summary?${queryString}`, { cache: "no-store" }),
+        fetchWithAuth(`/api/v1/analytics/customers/active?${queryString}&limit=100&offset=0&sort_by=total_messages&sort_order=desc`, { cache: "no-store" }),
+        fetchWithAuth(`/api/v1/analytics/customers/attention?${queryString}&limit=100&offset=0&sort_by=attention_score&sort_order=desc`, { cache: "no-store" }),
+      ]);
+      if (!summaryResponse.ok || !trendResponse.ok || !platformsResponse.ok || !customerSummaryResponse.ok || !activeCustomersResponse.ok || !attentionCustomersResponse.ok) {
+        const failed = [summaryResponse, trendResponse, platformsResponse, customerSummaryResponse, activeCustomersResponse, attentionCustomersResponse].find((response) => !response.ok)!;
+        const payload = await failed.json().catch(() => ({}));
+        throw new Error(payload.detail || "Analytics request failed");
+      }
+      const [nextSummary, nextTrend, nextPlatforms, nextCustomerSummary, nextActiveCustomers, nextAttentionCustomers] = await Promise.all([
+        summaryResponse.json() as Promise<AnalyticsSummary>,
+        trendResponse.json() as Promise<MessageTrend>,
+        platformsResponse.json() as Promise<PlatformAnalytics>,
+        customerSummaryResponse.json() as Promise<CustomerSummary>,
+        activeCustomersResponse.json() as Promise<CustomerActivityResponse>,
+        attentionCustomersResponse.json() as Promise<CustomerAttentionResponse>,
+      ]);
+      setSummary(nextSummary);
+      setTrend(nextTrend);
+      setPlatforms(nextPlatforms);
+      setCustomerSummary(nextCustomerSummary);
+      setActiveCustomers(nextActiveCustomers);
+      setAttentionCustomers(nextAttentionCustomers);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load analytics.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [queryString]);
 
-  const platformStats = analyticsData ? Object.entries(analyticsData.platform_breakdown).map(([platform, count]: any) => {
-    const total = analyticsData.total_conversations || 1;
-    return {
-      name: platform.charAt(0).toUpperCase() + platform.slice(1),
-      messages: count,
-      pct: Math.round((count / total) * 100),
-      color: platform === "facebook" ? "bg-blue-500" : platform === "instagram" ? "bg-pink-500" : platform === "email" ? "bg-yellow-500" : "bg-green-500"
-    };
-  }) : [];
+  useEffect(() => { void loadAnalytics(); }, [loadAnalytics]);
 
-  const barData = analyticsData?.messages_per_day?.map((d: any) => d.count) || [];
+  const exportReport = useCallback(async (format: "csv" | "pdf") => {
+    setExporting(format);
+    setExportError("");
+    try {
+      const response = await fetchWithAuth(`/api/v1/analytics/export?${queryString}&format=${format}`, { cache: "no-store" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.detail || "Analytics export failed");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `haqdesk-analytics.${format}`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setExportError(caught instanceof Error ? caught.message : "Could not export analytics.");
+    } finally {
+      setExporting(null);
+    }
+  }, [queryString]);
 
-  const recentActivity = analyticsData ? [
-    { label: "AI Drafts Generated", value: analyticsData.ai_drafts_generated.toLocaleString(), delta: "All time" },
-    { label: "Knowledge Docs", value: analyticsData.knowledge_documents.toLocaleString(), delta: `${analyticsData.knowledge_chunks} chunks` },
-    { label: "Team Members", value: analyticsData.team_members.toLocaleString(), delta: "Active" },
-    { label: "Open Conversations", value: analyticsData.open_conversations.toLocaleString(), delta: "Requiring attention" },
-  ] : [];
-  return (
-    <div className="page-padded font-body">
-      <div className="page-shell">
-        <header className="page-header">
-          <div className="page-header-row">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-surface-border rounded-lg text-[#818CF8] text-[9px] font-black uppercase tracking-widest mb-4"
-              >
-                <Zap size={12} strokeWidth={3} />
-                Live Data
-              </motion.div>
-              <h1 className="font-heading font-black tracking-tighter text-4xl sm:text-5xl text-foreground">Analytics</h1>
-              <p className="text-sm font-medium mt-2" style={{ color: "var(--muted-foreground)" }}>
-                Track your team performance and AI support activity in real time.
-              </p>
-            </div>
-            <div className="flex gap-3 mt-4 sm:mt-0">
-              <button className="px-6 py-3 bg-white/5 border border-surface-border rounded-xl text-[10px] font-black uppercase tracking-widest text-foreground hover:bg-white/10 transition-all">
-                Export Report
-              </button>
-              <button className="px-6 py-3 bg-[#6D4AE2] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover-glow transition-all active:scale-95 shadow-xl shadow-purple-950/20">
-                Refresh
-              </button>
-            </div>
-          </div>
-        </header>
+  const isEmpty = Boolean(summary && summary.metrics.total_conversations.value === 0 && summary.metrics.total_messages.value === 0);
 
-        <div className="page-body custom-scrollbar space-y-8">
-          {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              {/* KPI cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-                {kpis.map((kpi, i) => (
-                  <motion.div
-                    key={kpi.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    className="p-6 rounded-[2rem] bg-white/5 border border-surface-border hover:border-[#818CF8]/20 transition-all group"
-                  >
-                    <div className="flex justify-between items-start mb-5">
-                      <div className="p-2.5 bg-white/5 border border-surface-border rounded-xl group-hover:bg-[#6D4AE2] group-hover:text-white transition-all" style={{ color: kpi.color }}>
-                        <kpi.icon size={18} strokeWidth={2.5} />
-                      </div>
-                      <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 rounded-lg text-[9px] font-black uppercase">
-                        <TrendingUp size={9} strokeWidth={3} />
-                        {kpi.delta}
-                      </div>
-                    </div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.3em] mb-1.5" style={{ color: "var(--muted-foreground)" }}>{kpi.label}</p>
-                    <div className="text-3xl font-heading font-black tracking-tighter text-foreground">{kpi.value}</div>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Chart + Platform breakdown */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* Bar chart */}
-                <div className="lg:col-span-2 p-8 rounded-[2.5rem] bg-white/5 border border-surface-border">
-                  <div className="flex items-center gap-3 mb-6">
-                    <BarChart3 size={16} className="text-[#818CF8]" />
-                    <div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Message Volume</h3>
-                      <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>Daily volume last 7 days</p>
-                    </div>
-                  </div>
-                  <div className="h-[200px] flex items-end gap-1.5 justify-center">
-                    {barData.length === 0 ? (
-                      <p className="text-xs text-slate-500 self-center">No messages sent in the last 7 days</p>
-                    ) : (
-                      barData.map((h: number, i: number) => {
-                        const maxVal = Math.max(...barData, 1);
-                        const pctHeight = Math.round((h / maxVal) * 100);
-                        return (
-                          <div
-                            key={i}
-                            className="flex-1 max-w-[40px] rounded-t-lg bg-gradient-to-t from-[#6D4AE2]/40 to-[#818CF8] transition-all hover:opacity-80"
-                            style={{ height: `${pctHeight}%` }}
-                            title={`${h} messages on ${analyticsData?.messages_per_day?.[i]?.date}`}
-                          />
-                        );
-                      })
-                    )}
-                  </div>
-                  <div className="flex justify-between mt-3 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                    {analyticsData?.messages_per_day?.length > 0 ? (
-                      <>
-                        <span>{analyticsData.messages_per_day[0].date}</span>
-                        <span>{analyticsData.messages_per_day[analyticsData.messages_per_day.length - 1].date}</span>
-                      </>
-                    ) : (
-                      <span>No dates available</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Platform breakdown */}
-                <div className="p-8 rounded-[2.5rem] bg-white/5 border border-surface-border">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Activity size={16} className="text-[#818CF8]" />
-                    <div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-foreground">By Platform</h3>
-                      <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>Message distribution</p>
-                    </div>
-                  </div>
-                  <div className="space-y-5">
-                    {platformStats.map((p: any) => (
-                      <div key={p.name}>
-                        <div className="flex justify-between mb-1.5">
-                          <span className="text-[11px] font-bold text-foreground">{p.name}</span>
-                          <span className="text-[11px] font-black text-slate-400">{p.messages.toLocaleString()}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                          <div className={`h-full rounded-full ${p.color}`} style={{ width: `${p.pct}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                    {platformStats.length === 0 && (
-                      <p className="text-xs text-slate-500">No platform breakdown data available</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* AI stats row */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-                {recentActivity.map((a, i) => (
-                  <motion.div
-                    key={a.label}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="p-5 rounded-[2rem] bg-white/5 border border-surface-border"
-                  >
-                    <p className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--muted-foreground)" }}>{a.label}</p>
-                    <p className="text-2xl font-black tracking-tighter text-foreground">{a.value}</p>
-                    <p className="text-[10px] font-bold text-emerald-400 mt-1">{a.delta}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+  return <div className="page-padded font-body">
+    <div className="page-shell">
+      <AnalyticsPageHeader generatedAt={summary?.generated_at} refreshing={refreshing} exporting={exporting} exportDisabled={!summary || Boolean(error)} exportError={exportError} onRefresh={() => void loadAnalytics(true)} onExport={(format) => void exportReport(format)} />
+      <div className="page-body custom-scrollbar space-y-7">
+        <AnalyticsFilterBar filters={filters} setFilter={setFilter} onReset={resetFilters} agentOptions={agentOptions} />
+        <nav aria-label="Analytics sections" className="-mx-1 overflow-x-auto px-1 pb-1"><div className="flex min-w-max gap-1 rounded-2xl border border-border bg-surface-wash p-1.5">
+          {([["overview", "Overview", LayoutDashboard], ["channels", "Channels", Radio], ["customers", "Customers", Users], ["trends", "Trends", BarChart3]] as const).map(([id, label, Icon]) => <button key={id} type="button" onClick={() => setActiveView(id)} aria-current={activeView === id ? "page" : undefined} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeView === id ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:bg-surface hover:text-foreground"}`}><Icon size={15} />{label}</button>)}
+        </div></nav>
+        {loading && !summary ? <AnalyticsSkeleton /> : error ? <AnalyticsErrorState message={error} onRetry={() => void loadAnalytics(true)} /> : summary && trend && platforms && customerSummary && activeCustomers && attentionCustomers ? <>
+          {isEmpty ? <AnalyticsEmptyState /> : <>
+            {activeView === "overview" && <div className="space-y-7"><DataQualityBanner notices={summary.data_quality_notices} /><KpiGrid summary={summary} /><section className="rounded-[2rem] border border-border bg-surface p-6"><div className="mb-5"><h2 className="text-xl font-bold">Current Support Status</h2><p className="mt-1 text-sm text-muted-foreground">A current snapshot of workload and support resources.</p></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-3">{[["Pending", summary.metrics.pending_conversations.value], ["Resolved", summary.metrics.resolved_conversations.value], ["Knowledge Documents", summary.metrics.knowledge_documents.value]].map(([label, value]) => <div key={label} className="rounded-2xl bg-surface-wash p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p><p className="mt-1 font-heading text-3xl font-black">{value?.toLocaleString() ?? "—"}</p></div>)}</div></section></div>}
+            {activeView === "channels" && <PlatformAnalyticsSection data={platforms} filteredPlatform={filters.platform} />}
+            {activeView === "customers" && <CustomerAnalyticsSection summary={customerSummary} active={activeCustomers} attention={attentionCustomers} refreshing={refreshing} onRefresh={() => void loadAnalytics(true)} />}
+            {activeView === "trends" && <div className="space-y-5"><div><h2 className="text-2xl font-black">Message Activity</h2><p className="mt-1 text-sm text-muted-foreground">Compare customer demand and business replies over the selected period.</p></div><MessageVolumeChart trend={trend} /></div>}
+          </>}
+        </> : null}
       </div>
     </div>
-  );
+  </div>;
 }

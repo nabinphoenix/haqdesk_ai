@@ -16,6 +16,9 @@ from app.core.database import SessionLocal
 from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.message import Message
+from app.models.business import Business
+from app.models.integration import Integration
+from app.services.credential_service import decrypt_secret
 from app.services.email_poller import run_email_poll
 from app.services.email_service import send_email
 
@@ -32,7 +35,7 @@ def decoded(value):
 
 
 def find_reply(subject):
-    mail = imaplib.IMAP4_SSL(settings.TECHSURU_IMAP_HOST, settings.TECHSURU_IMAP_PORT)
+    mail = imaplib.IMAP4_SSL(settings.MAIL_IMAP_HOST, settings.MAIL_IMAP_PORT)
     try:
         mail.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
         mail.select("inbox")
@@ -74,15 +77,36 @@ def find_reply(subject):
         mail.logout()
 
 
-def find_database_result(subject):
+def email_test_context(business_id):
+    db = SessionLocal()
+    try:
+        business = db.query(Business).filter(Business.id == business_id).first()
+        integration = db.query(Integration).filter(
+            Integration.business_id == business_id,
+            Integration.platform == "email",
+            Integration.status == "active",
+        ).first()
+        if not business or not integration:
+            raise RuntimeError("Business must have an active email integration")
+        metadata = integration.metadata_json or {}
+        return {
+            "business_name": business.name or "Support Team",
+            "email": metadata.get("email") or integration.page_id,
+            "password": decrypt_secret(metadata.get("password_encrypted")),
+        }
+    finally:
+        db.close()
+
+
+def find_database_result(subject, business_id, sender_email):
     db = SessionLocal()
     try:
         customer = (
             db.query(Customer)
             .filter(
-                Customer.business_id == 1,
+                Customer.business_id == business_id,
                 Customer.platform == "email",
-                Customer.platform_user_id == settings.MAIL_USERNAME.lower(),
+                Customer.platform_user_id == sender_email.lower(),
             )
             .first()
         )
@@ -91,7 +115,7 @@ def find_database_result(subject):
         conversation = (
             db.query(Conversation)
             .filter(
-                Conversation.business_id == 1,
+                Conversation.business_id == business_id,
                 Conversation.customer_id == customer.id,
             )
             .order_by(Conversation.created_at.desc())
@@ -133,11 +157,12 @@ def find_database_result(subject):
         db.close()
 
 
-def main():
+def main(business_id):
+    context = email_test_context(business_id)
     marker = datetime.now().strftime("%Y%m%d-%H%M%S")
     subject = f"HaqDesk Auto Mode Live Test {marker}"
     body = (
-        "<p>Hello TechSuru Support,</p>"
+        f"<p>Hello {context['business_name']} Support,</p>"
         "<p>I am planning to buy a laptop and have several questions:</p>"
         "<ol>"
         "<li>Is delivery available outside Kathmandu?</li>"
@@ -149,7 +174,7 @@ def main():
         f"<p>Test marker: {marker}</p>"
     )
     print(f"TEST_SUBJECT={subject}")
-    if not send_email(settings.TECHSURU_IMAP_EMAIL, subject, body):
+    if not send_email(context["email"], subject, body):
         raise RuntimeError("Initial SMTP test email was not accepted")
     print("INITIAL_SMTP_ACCEPTED=true")
 
@@ -158,7 +183,9 @@ def main():
     for attempt in range(1, 7):
         time.sleep(10)
         run_email_poll()
-        database_result = find_database_result(subject)
+        database_result = find_database_result(
+            subject, business_id, settings.MAIL_USERNAME
+        )
         reply_result = find_reply(subject)
         print(
             f"attempt={attempt} database_reply={bool(database_result and database_result['reply_message_id'])} "
@@ -184,4 +211,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--business-id", required=True, type=int)
+    args = parser.parse_args()
+    main(args.business_id)

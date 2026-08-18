@@ -48,11 +48,15 @@ def is_retryable_llm_error(exc: Exception) -> bool:
 class LLMGateway:
     def __init__(self):
         # Propagate config keys to os.environ for LiteLLM's internal use
-        for key in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]:
+        for key in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]:
             val = getattr(settings, key, None)
             if val and key not in os.environ:
                 os.environ[key] = val
-        
+
+        # Ollama local server base URL (used by LiteLLM for ollama/* models)
+        if settings.OLLAMA_API_BASE:
+            os.environ.setdefault("OLLAMA_API_BASE", settings.OLLAMA_API_BASE)
+
         # Disable litellm telemetry
         litellm.telemetry = False
 
@@ -77,8 +81,11 @@ class LLMGateway:
             provider = model.split("/")[0] if "/" in model else None
             
             # Check if key is available for this model's provider
+            # Ollama models run locally and don't need an API key
             key_name = f"{provider.upper()}_API_KEY" if provider else None
-            if key_name and not os.environ.get(key_name) and not getattr(settings, key_name, None):
+            if provider and provider.lower() == "ollama":
+                pass  # No API key needed for local Ollama
+            elif key_name and not os.environ.get(key_name) and not getattr(settings, key_name, None):
                 logger.warning(f"⚠️ Skipping model {model} because {key_name} is not configured.")
                 if idx == 0 and not settings.LLM_FALLBACK_ENABLED:
                     raise LLMGatewayError(f"Primary model {model} API key {key_name} is not configured and fallback is disabled.")

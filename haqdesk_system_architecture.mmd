@@ -1,0 +1,37 @@
+flowchart LR
+  classDef core fill:#F4F1FF,stroke:#6D4AE2,stroke-width:2px,color:#0F172A;
+  classDef data fill:#F8FAFC,stroke:#475569,stroke-width:2px,color:#0F172A;
+  classDef external fill:#FFFFFF,stroke:#E2E8F0,stroke-width:2px,color:#0F172A;
+  classDef partial fill:#FFFBEB,stroke:#F59E0B,stroke-width:2px,stroke-dasharray:7 5,color:#0F172A;
+
+  Customer --> FB[Facebook Messenger]
+  Customer --> IG[Instagram Direct]
+  Customer --> Email[Email]
+  Customer -.-> WA[WhatsApp<br/>Partial / not verified]
+  FB --> Meta[Meta webhooks + Graph API]
+  IG --> Meta
+  Meta --> Webhooks[FastAPI webhook processing]
+  Email --> Poller[IMAP poller / SMTP]
+  Poller --> Backend
+  Webhooks --> Backend[FastAPI backend]
+  Backend --> Auth[JWT authentication + RBAC]
+  Backend --> Inbox[Inbox + conversation management]
+  Backend --> RAG[AI / RAG service]
+  Backend --> Analytics[Analytics service]
+  Backend --> Team[Team + business settings]
+  Dashboard[Next.js dashboard<br/>Inbox • Knowledge • Analytics • Team • Settings] <-->|secured APIs| Backend
+  Backend --> PG[(PostgreSQL<br/>businesses, users, customers, conversations,<br/>messages, integrations, knowledge metadata)]
+  RAG --> Q[(Qdrant<br/>techsuru_collection<br/>business_id filtered)]
+  RAG --> LLM[LiteLLM gateway<br/>Groq primary + configured fallbacks]
+  Backend --> Files[Local file storage<br/>temporary ingestion + chat attachments]
+  Backend -->|approved reply| Meta
+  Meta --> FB
+  Meta --> IG
+  Analytics -->|tenant aggregates| PG
+  Security[Every business query is restricted<br/>by authenticated business_id] --- Backend
+
+  class Backend,Webhooks,Auth,Inbox,RAG,Analytics,Team,Meta,LLM,Q core;
+  class PG,Files data;
+  class Customer,FB,IG,Email,Poller,Dashboard external;
+  class WA partial;
+

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
@@ -59,44 +60,41 @@ def test_webhook_recipient_routes_to_its_own_business():
         session.close()
 
 
-def test_qdrant_retrieval_is_filtered_by_business(monkeypatch):
-    collection = "multibusiness_isolation_test"
+def test_qdrant_retrieval_uses_structurally_isolated_business_collections(monkeypatch):
+    prefix = "multibusiness_isolation_test"
+    first_business_id = 101
+    second_business_id = 202
     client = QdrantClient(":memory:")
-    client.create_collection(
-        collection_name=collection,
-        vectors_config=VectorParams(size=2, distance=Distance.COSINE),
-    )
-    client.upsert(
-        collection_name=collection,
-        points=[
+    monkeypatch.setattr(settings, "QDRANT_COLLECTION_PREFIX", prefix)
+    for business_id, content, filename in [
+        (first_business_id, "FIRST_BUSINESS_SECRET_POLICY", "first.pdf"),
+        (second_business_id, "SECOND_BUSINESS_SECRET_POLICY", "second.pdf"),
+    ]:
+        collection = f"{prefix}_{business_id}"
+        client.create_collection(
+            collection_name=collection,
+            vectors_config=VectorParams(size=2, distance=Distance.COSINE),
+        )
+        client.upsert(
+            collection_name=collection,
+            points=[
             PointStruct(
-                id=1,
+                id=business_id,
                 vector=[1.0, 0.0],
                 payload={
-                    "business_id": 101,
-                    "content": "FIRST_BUSINESS_SECRET_POLICY",
-                    "filename": "first.pdf",
+                    "business_id": business_id,
+                    "content": content,
+                    "filename": filename,
                 },
             ),
-            PointStruct(
-                id=2,
-                vector=[1.0, 0.0],
-                payload={
-                    "business_id": 202,
-                    "content": "SECOND_BUSINESS_SECRET_POLICY",
-                    "filename": "second.pdf",
-                },
-            ),
-        ],
-    )
+            ],
+        )
     service = RAGService()
     service._qdrant = client
-    service._collection_initialized = True
-    monkeypatch.setattr(settings, "QDRANT_COLLECTION_NAME", collection)
     monkeypatch.setattr(service, "embed_text", lambda _: [1.0, 0.0])
 
-    first_results = service.retrieve_chunks("same question", 101)
-    second_results = service.retrieve_chunks("same question", 202)
+    first_results = service.retrieve_chunks("same question", first_business_id)
+    second_results = service.retrieve_chunks("same question", second_business_id)
 
     assert [item["content"] for item in first_results] == [
         "FIRST_BUSINESS_SECRET_POLICY"
@@ -114,6 +112,38 @@ def test_non_techsuru_prompt_does_not_inject_techsuru_policies():
     assert "Acme Repairs" in prompt
     assert "TechSuru" not in prompt
     assert "Do not assume what this business sells" in prompt
+
+
+def test_rag_exception_fallback_uses_actual_non_techsuru_business(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+    Business.__table__.create(engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        session.add(Business(id=202, name="Acme Repairs"))
+        session.commit()
+        service = RAGService()
+
+        def raise_real_retrieval_error(*_args, **_kwargs):
+            raise RuntimeError("forced Qdrant retrieval failure")
+
+        monkeypatch.setattr(service, "retrieve_chunks", raise_real_retrieval_error)
+        result = asyncio.run(
+            service.query(
+                question="Can you help?",
+                business_id=202,
+                db=session,
+                language="english",
+            )
+        )
+
+        assert "Welcome to Acme Repairs support" in result["answer"]
+        assert "team member will follow up shortly" in result["answer"]
+        assert "TechSuru" not in result["answer"]
+        assert "laptop" not in result["answer"].lower()
+        assert result["metadata"]["fallback_used"] is True
+        assert "forced Qdrant retrieval failure" in result["metadata"]["error"]
+    finally:
+        session.close()
 
 
 def test_email_poller_builds_one_config_per_business(monkeypatch):
@@ -155,9 +185,6 @@ def test_email_poller_builds_one_config_per_business(monkeypatch):
             ),
         ])
         session.commit()
-        monkeypatch.setattr(settings, "TECHSURU_IMAP_EMAIL", None)
-        monkeypatch.setattr(settings, "TECHSURU_IMAP_PASSWORD", None)
-
         configs = build_email_poll_configs(session)
         assert configs == [
             {

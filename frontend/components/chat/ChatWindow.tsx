@@ -113,6 +113,7 @@ export default function ChatWindow({
 }: ChatWindowProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
+    const [isAiAssistedReply, setIsAiAssistedReply] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [sending, setSending] = useState(false);
     const [emailSubject, setEmailSubject] = useState("Re: Support from TechSuru");
@@ -435,9 +436,11 @@ export default function ChatWindow({
         if (!token) { alert("Session expired. Please login."); return; }
 
         const text = input.trim();
+        const aiAssisted = isAiAssistedReply;
         const fileToSend = attachedFile;
 
         setInput("");
+        setIsAiAssistedReply(false);
         setAttachedFile(null);
         setSending(true);
 
@@ -501,7 +504,11 @@ export default function ChatWindow({
                 } else {
                     const errData = await res.json().catch(() => ({}));
                     const errMsg = errData.detail || "Failed to send attachment";
-                    toast.error(errMsg);
+                    toast.error(
+                        res.status === 409
+                            ? `${errMsg} Open Settings → Integrations to connect it.`
+                            : errMsg
+                    );
                     setMessages(prev => prev.filter(m => m.id !== tempId && m.id !== tempId + 1));
                 }
             } catch (e) {
@@ -526,7 +533,11 @@ export default function ChatWindow({
                 res = await fetchWithAuth(`/api/v1/inbox/conversations/${conversationId}/reply`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content: text, subject: conversationPlatform === "email" ? emailSubject : undefined }),
+                    body: JSON.stringify({
+                        content: text,
+                        subject: conversationPlatform === "email" ? emailSubject : undefined,
+                        ai_assisted: aiAssisted,
+                    }),
                 });
                 if (res.ok) {
                     const savedMessage = await res.json();
@@ -602,7 +613,7 @@ export default function ChatWindow({
                     {onBack && (
                         <button
                             onClick={onBack}
-                            className="sm:hidden w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                            className="sm:hidden w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-surface-wash dark:hover:bg-surface-wash transition-all"
                         >
                             <ChevronLeft size={18} />
                         </button>
@@ -611,7 +622,7 @@ export default function ChatWindow({
                     {/* Avatar */}
                     <div className="relative w-9 h-9 shrink-0">
                         <div
-                            className="w-full h-full rounded-xl flex items-center justify-center text-white text-[12px] font-bold"
+                            className="w-full h-full rounded-xl flex items-center justify-center text-foreground text-[12px] font-bold"
                             style={{ background: "#6D4AE2" }}
                         >
                             {initials}
@@ -631,7 +642,7 @@ export default function ChatWindow({
                                 {customerName || "Customer"}
                             </h2>
                             <span
-                                className="px-2 py-0.5 rounded-full text-white text-[9px] font-bold flex items-center gap-1"
+                                className="px-2 py-0.5 rounded-full text-foreground text-[9px] font-bold flex items-center gap-1"
                                 style={{ background: pColor }}
                             >
                                 <PlatformIcon platform={platform || ""} size={8} />
@@ -639,7 +650,7 @@ export default function ChatWindow({
                             </span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] inline-block" />
                             <span className="text-[10px] text-[var(--text-secondary)]">Active now</span>
                         </div>
                     </div>
@@ -651,7 +662,7 @@ export default function ChatWindow({
                     <select
                         value={conversationStatus || "open"}
                         onChange={(e) => handleUpdateStatus(e.target.value)}
-                        className="text-[10px] font-bold px-2 py-1 rounded-lg bg-black/10 border border-[var(--border)] text-[var(--text-secondary)] focus:outline-none"
+                        className="text-[10px] font-bold px-2 py-1 rounded-lg bg-surface-wash border border-[var(--border)] text-[var(--text-secondary)] focus:outline-none"
                     >
                         <option value="open" className="bg-[var(--surface)] text-[var(--text-primary)]">Open</option>
                         <option value="resolved" className="bg-[var(--surface)] text-[var(--text-primary)]">Resolved</option>
@@ -663,10 +674,10 @@ export default function ChatWindow({
                         value={conversationPriority || "medium"}
                         onChange={(e) => handleUpdatePriority(e.target.value)}
                         className={`text-[10px] font-bold px-2 py-1 rounded-lg border focus:outline-none ${
-                            conversationPriority === "urgent" ? "bg-red-500/20 border-red-500/30 text-red-400" :
+                            conversationPriority === "urgent" ? "bg-[var(--error-surface)] border-[var(--error-border)] text-[var(--error-foreground)]" :
                             conversationPriority === "high" ? "bg-orange-500/20 border-orange-500/30 text-orange-400" :
-                            conversationPriority === "low" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" :
-                            "bg-yellow-500/20 border-yellow-500/30 text-yellow-400"
+                            conversationPriority === "low" ? "bg-[var(--success-surface)] border-[var(--success-border)] text-[var(--success-foreground)]" :
+                            "bg-yellow-500/20 border-yellow-500/30 text-[var(--warning)]"
                         }`}
                     >
                         <option value="low" className="bg-[var(--surface)] text-[var(--text-primary)]">🟢 Low</option>
@@ -679,12 +690,12 @@ export default function ChatWindow({
                         <button
                             onClick={onToggleCustomerPanel}
                             title={showCustomerPanel ? "Hide customer info" : "Show customer info"}
-                            className="hidden lg:flex w-8 h-8 rounded-lg items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                            className="hidden lg:flex w-8 h-8 rounded-lg items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-surface-wash dark:hover:bg-surface-wash transition-all"
                         >
                             {showCustomerPanel ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                         </button>
                     )}
-                    <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all">
+                    <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-surface-wash dark:hover:bg-surface-wash transition-all">
                         <MoreVertical size={15} />
                     </button>
                 </div>
@@ -725,6 +736,7 @@ export default function ChatWindow({
                                     agentInitials={agentInitials}
                                     onUseDraft={(draft) => {
                                         setInput(draft);
+                                        setIsAiAssistedReply(true);
                                         setTimeout(() => textareaRef.current?.focus(), 50);
                                     }}
                                 />
@@ -741,9 +753,10 @@ export default function ChatWindow({
                         suggestion={aiSuggestion.content}
                         sources={["Knowledge Base"]}
                         confidence={0.92}
-                        onAccept={() => { setInput(aiSuggestion.content); setAiDismissed(true); }}
+                        onAccept={() => { setInput(aiSuggestion.content); setIsAiAssistedReply(true); setAiDismissed(true); }}
                         onEdit={() => {
                             setInput(aiSuggestion.content);
+                            setIsAiAssistedReply(true);
                             setAiDismissed(true);
                             setTimeout(() => textareaRef.current?.focus(), 50);
                         }}
@@ -770,7 +783,7 @@ export default function ChatWindow({
                         >
                             <div className="flex items-center justify-between mb-2.5">
                                 <span className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Quick Emojis</span>
-                                <button onClick={() => setShowEmojiPicker(false)} className="text-[var(--text-secondary)] hover:text-red-400 transition-colors">
+                                <button onClick={() => setShowEmojiPicker(false)} className="text-[var(--text-secondary)] hover:text-[var(--error-foreground)] transition-colors">
                                     <X size={12} />
                                 </button>
                             </div>
@@ -779,7 +792,7 @@ export default function ChatWindow({
                                     <button
                                         key={e}
                                         onClick={() => setInput(p => p + e)}
-                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[17px] hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-90"
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[17px] hover:bg-surface-wash dark:hover:bg-surface-wash transition-all active:scale-90"
                                     >
                                         {e}
                                     </button>
@@ -809,7 +822,7 @@ export default function ChatWindow({
                         </div>
                         <button
                             onClick={() => setAttachedFile(null)}
-                            className="p-1.5 text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--error-foreground)] hover:bg-[var(--error-surface)] rounded-lg transition-all"
                             title="Remove attachment"
                         >
                             <X size={14} />
@@ -838,10 +851,10 @@ export default function ChatWindow({
                         /* Recording mode UI */
                         <div className="flex items-center gap-3 py-2">
                             {/* Animated recording indicator */}
-                            <div className="flex items-center gap-2 flex-1 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">
-                                <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shrink-0" />
-                                <span className="text-red-400 text-[13px] font-medium">Recording...</span>
-                                <span className="text-red-400/60 text-[12px] ml-auto">
+                            <div className="flex items-center gap-2 flex-1 bg-[var(--error-surface)] border border-[var(--error-border)] rounded-xl px-4 py-2.5">
+                                <div className="w-3 h-3 rounded-full bg-[var(--error)] animate-pulse shrink-0" />
+                                <span className="text-[var(--error-foreground)] text-[13px] font-medium">Recording...</span>
+                                <span className="text-[var(--error-foreground)]/60 text-[12px] ml-auto">
                                     {Math.floor(recordingDuration / 60).toString().padStart(2, "0")}:
                                     {(recordingDuration % 60).toString().padStart(2, "0")}
                                 </span>
@@ -850,7 +863,7 @@ export default function ChatWindow({
                             {/* Cancel recording */}
                             <button
                                 onClick={cancelRecording}
-                                className="p-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all"
+                                className="p-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-surface-wash dark:hover:bg-surface-wash rounded-xl transition-all"
                                 title="Cancel recording"
                             >
                                 <X size={18} />
@@ -859,7 +872,7 @@ export default function ChatWindow({
                             {/* Stop and send */}
                             <button
                                 onClick={stopRecording}
-                                className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all flex items-center gap-1.5"
+                                className="p-2.5 bg-[var(--error)] hover:bg-red-600 text-on-accent rounded-xl transition-all flex items-center gap-1.5"
                                 title="Stop and send"
                             >
                                 <Send size={16} />
@@ -890,14 +903,14 @@ export default function ChatWindow({
                                 <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => setShowEmojiPicker(v => !v)}
-                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${showEmojiPicker ? "bg-[#6D4AE2] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5"}`}
+                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${showEmojiPicker ? "bg-accent text-on-accent" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-surface-wash dark:hover:bg-surface-wash"}`}
                                     >
                                         <Smile size={15} />
                                     </button>
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={uploadingFile}
-                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-surface-wash dark:hover:bg-surface-wash transition-all disabled:opacity-50"
                                         title="Attach file"
                                     >
                                         {uploadingFile ? (
@@ -911,7 +924,7 @@ export default function ChatWindow({
                                     {!input.trim() && !attachedFile && (
                                         <button
                                             onClick={startRecording}
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-purple-500 hover:bg-purple-500/10 transition-all shrink-0"
+                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-purple-500 hover:bg-accent/10 transition-all shrink-0"
                                             title="Record voice message"
                                         >
                                             <Mic size={15} />
@@ -933,11 +946,11 @@ export default function ChatWindow({
                                 <button
                                     onClick={handleSend}
                                     disabled={(!input.trim() && !attachedFile) || sending}
-                                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-white text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-foreground text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                                     style={{ background: pColor, boxShadow: `0 4px 15px ${pColor}40` }}
                                 >
                                     {sending ? (
-                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <div className="w-3.5 h-3.5 border-2 border-on-accent/30 border-t-white rounded-full animate-spin" />
                                     ) : (
                                         <Send size={13} strokeWidth={2.5} />
                                     )}

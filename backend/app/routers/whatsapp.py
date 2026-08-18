@@ -103,14 +103,17 @@ async def send_message(
         access_token = integration.access_token
         metadata = integration.metadata_json or {}
         phone_number_id = metadata.get("phone_number_id") or integration.page_id
-    elif conversation.business_id == 1:
+    elif settings.ALLOW_GLOBAL_CHANNEL_CREDENTIALS_IN_SANDBOX:
         access_token = settings.WHATSAPP_ACCESS_TOKEN
         phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
     else:
         access_token = None
         phone_number_id = None
     if not access_token or not phone_number_id:
-        raise HTTPException(status_code=500, detail="WhatsApp credentials not configured")
+        raise HTTPException(
+            status_code=409,
+            detail="Connect your whatsapp account before sending messages.",
+        )
 
     try:
         await messaging_service.send_message(

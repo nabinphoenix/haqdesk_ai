@@ -245,7 +245,7 @@ export default function KnowledgeBase() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-surface-border rounded-lg text-[#818CF8] text-[9px] font-black uppercase tracking-widest mb-3"
+                className="inline-flex items-center gap-2 px-3 py-1 bg-surface-wash border border-surface-border rounded-lg text-accent-glow text-[9px] font-black uppercase tracking-widest mb-3"
               >
                 <Zap size={12} strokeWidth={3} />
                 RAG Knowledge Base
@@ -259,7 +259,7 @@ export default function KnowledgeBase() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2.5 px-6 py-3 bg-[#6D4AE2] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-2.5 px-6 py-3 bg-accent text-on-accent rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95 disabled:opacity-50"
               >
                 <Upload size={16} strokeWidth={2.5} />
                 Upload Document
@@ -269,20 +269,20 @@ export default function KnowledgeBase() {
 
           {/* Search bar */}
           <form onSubmit={handleQuerySubmit} className="relative mt-4 group">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#818CF8] transition-colors" />
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent-glow transition-colors" />
             <input
               type="text"
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               placeholder="Ask a question to test your knowledge base..."
-              className="w-full bg-white/5 border border-surface-border pl-10 pr-32 py-3 rounded-2xl text-sm font-medium text-foreground placeholder-slate-500 outline-none transition-all focus:border-[#818CF8]/40 focus:bg-white/[0.08]"
+              className="w-full bg-surface-wash border border-surface-border pl-10 pr-32 py-3 rounded-2xl text-sm font-medium text-foreground placeholder-slate-500 outline-none transition-all focus:border-accent-glow/40 focus:bg-surface/[0.08]"
             />
             <button
               type="submit"
               disabled={queryLoading || !queryText.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white rounded-xl text-[10px] font-black uppercase tracking-wider disabled:opacity-40 transition-all flex items-center gap-1.5"
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent hover:bg-accent-hover text-on-accent rounded-xl text-[10px] font-black uppercase tracking-wider disabled:opacity-40 transition-all flex items-center gap-1.5"
             >
-              {queryLoading ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Bot size={11} />}
+              {queryLoading ? <div className="w-3 h-3 border-2 border-on-accent border-t-transparent rounded-full animate-spin" /> : <Bot size={11} />}
               {queryLoading ? "..." : "Test"}
             </button>
           </form>
@@ -302,7 +302,7 @@ export default function KnowledgeBase() {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mb-5 p-4 bg-red-950/30 border border-red-900/50 text-red-400 rounded-2xl flex items-center gap-3 text-xs font-semibold"
+                className="mb-5 p-4 bg-red-950/30 border border-red-900/50 text-[var(--error-foreground)] rounded-2xl flex items-center gap-3 text-xs font-semibold"
               >
                 <AlertCircle size={15} />
                 <span>{uploadError}</span>
@@ -313,7 +313,7 @@ export default function KnowledgeBase() {
 
           {/* Drag overlay */}
           {dragActive && (
-            <div className="mb-6 p-10 border-2 border-dashed border-[#818CF8]/40 bg-[#818CF8]/5 rounded-[2rem] flex flex-col items-center justify-center text-[#818CF8] animate-pulse">
+            <div className="mb-6 p-10 border-2 border-dashed border-accent-glow/40 bg-accent-glow/5 rounded-[2rem] flex flex-col items-center justify-center text-accent-glow animate-pulse">
               <Upload size={40} className="mb-3" />
               <span className="text-sm font-bold uppercase tracking-wider">Drop file to upload</span>
             </div>
@@ -321,16 +321,16 @@ export default function KnowledgeBase() {
 
           {/* Upload progress */}
           {uploading && (
-            <div className="mb-6 p-5 bg-white/5 border border-surface-border rounded-2xl">
+            <div className="mb-6 p-5 bg-surface-wash border border-surface-border rounded-2xl">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#818CF8] animate-ping" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Uploading and indexing...</span>
+                  <div className="w-2 h-2 rounded-full bg-accent-glow animate-ping" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Uploading and indexing...</span>
                 </div>
-                <span className="text-xs font-bold text-[#818CF8]">{uploadProgress}%</span>
+                <span className="text-xs font-bold text-accent-glow">{uploadProgress}%</span>
               </div>
-              <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-[#6D4AE2] h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+              <div className="w-full bg-surface-wash h-1.5 rounded-full overflow-hidden">
+                <div className="bg-accent h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
               </div>
             </div>
           )}
@@ -343,12 +343,12 @@ export default function KnowledgeBase() {
 
               {/* Stats bar */}
               <div className="flex items-center justify-between px-1 mb-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                   {documents.length} document{documents.length !== 1 ? "s" : ""}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Connected</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
+                  <span className="text-[10px] font-bold text-[var(--success-foreground)] uppercase tracking-wider">Connected</span>
                 </div>
               </div>
 
@@ -362,38 +362,38 @@ export default function KnowledgeBase() {
                   onClick={() => setSelectedDoc(doc)}
                   className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group ${
                     selectedDoc?.id === doc.id
-                      ? "border-[#6D4AE2]/60 bg-[#6D4AE2]/10"
-                      : "border-surface-border bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20"
+                      ? "border-accent/60 bg-accent/10"
+                      : "border-surface-border bg-surface-wash hover:bg-surface/[0.05] hover:border-border"
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    doc.status === "processing" ? "bg-[#6D4AE2]/20 text-[#818CF8]" :
-                    doc.status === "failed" ? "bg-red-500/20 text-red-400" :
-                    "bg-emerald-500/10 text-emerald-400"
+                    doc.status === "processing" ? "bg-accent/20 text-accent-glow" :
+                    doc.status === "failed" ? "bg-[var(--error-surface)] text-[var(--error-foreground)]" :
+                    "bg-[var(--success-surface)] text-[var(--success-foreground)]"
                   }`}>
                     <FileText size={18} strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-bold text-foreground truncate">{doc.filename}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-slate-500 uppercase font-bold">{doc.file_type}</span>
-                      <span className="text-slate-600">·</span>
-                      <span className="text-[10px] text-slate-500">{doc.chunks} chunks</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold">{doc.file_type}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-[10px] text-muted-foreground">{doc.chunks} chunks</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {doc.status === "processing" && <div className="w-3 h-3 border-2 border-[#818CF8] border-t-transparent rounded-full animate-spin" />}
-                    {doc.status === "ready" && <CheckCircle2 size={14} className="text-emerald-400" />}
-                    {doc.status === "failed" && <div className="w-3 h-3 rounded-full bg-red-500" />}
+                    {doc.status === "processing" && <div className="w-3 h-3 border-2 border-accent-glow border-t-transparent rounded-full animate-spin" />}
+                    {doc.status === "ready" && <CheckCircle2 size={14} className="text-[var(--success-foreground)]" />}
+                    {doc.status === "failed" && <div className="w-3 h-3 rounded-full bg-[var(--error)]" />}
                     {isAdmin && (
                       <button
                         onClick={(e) => handleDelete(doc.id, e)}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1.5 text-muted-foreground hover:text-[var(--error-foreground)] transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={13} />
                       </button>
                     )}
-                    <ChevronRight size={14} className="text-slate-600" />
+                    <ChevronRight size={14} className="text-muted-foreground" />
                   </div>
                 </motion.div>
               ))}
@@ -401,12 +401,12 @@ export default function KnowledgeBase() {
               {/* Upload placeholder */}
               {isAdmin && <div
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-4 p-4 rounded-2xl border border-dashed border-surface-border bg-white/[0.01] hover:border-[#818CF8]/30 hover:bg-white/[0.04] transition-all cursor-pointer group"
+                className="flex items-center gap-4 p-4 rounded-2xl border border-dashed border-surface-border bg-surface/[0.01] hover:border-accent-glow/30 hover:bg-surface/[0.04] transition-all cursor-pointer group"
               >
-                <div className="w-10 h-10 rounded-xl border border-surface-border bg-white/5 flex items-center justify-center text-slate-500 group-hover:text-[#818CF8] group-hover:border-[#818CF8]/30 transition-all">
+                <div className="w-10 h-10 rounded-xl border border-surface-border bg-surface-wash flex items-center justify-center text-muted-foreground group-hover:text-accent-glow group-hover:border-accent-glow/30 transition-all">
                   <Plus size={18} />
                 </div>
-                <span className="text-[12px] font-bold text-slate-500 group-hover:text-[#818CF8] transition-colors uppercase tracking-wider">Upload new document</span>
+                <span className="text-[12px] font-bold text-muted-foreground group-hover:text-accent-glow transition-colors uppercase tracking-wider">Upload new document</span>
               </div>}
             </div>
 
@@ -417,45 +417,45 @@ export default function KnowledgeBase() {
                   key={selectedDoc.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-[2rem] border border-surface-border bg-white/[0.02] p-7 h-full"
+                  className="rounded-[2rem] border border-surface-border bg-surface-wash p-7 h-full"
                 >
                   <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-[#6D4AE2]/20 flex items-center justify-center text-[#818CF8]">
+                      <div className="w-12 h-12 rounded-2xl bg-accent/20 flex items-center justify-center text-accent-glow">
                         <FileText size={22} strokeWidth={2} />
                       </div>
                       <div>
                         <h2 className="text-base font-black text-foreground">{selectedDoc.filename}</h2>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Uploaded {formatDate(selectedDoc.created_at)}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Uploaded {formatDate(selectedDoc.created_at)}</p>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedDoc(null)} className="p-1.5 text-slate-500 hover:text-white transition-colors">
+                    <button onClick={() => setSelectedDoc(null)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
                       <X size={16} />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     {[
-                      { label: "Status", value: selectedDoc.status, color: selectedDoc.status === "ready" ? "text-emerald-400" : "text-[#818CF8]" },
+                      { label: "Status", value: selectedDoc.status, color: selectedDoc.status === "ready" ? "text-[var(--success-foreground)]" : "text-accent-glow" },
                       { label: "Chunks", value: selectedDoc.chunks?.toString() || "—", color: "text-foreground" },
                       { label: "File type", value: selectedDoc.file_type?.toUpperCase() || "—", color: "text-foreground" },
                     ].map((s) => (
-                      <div key={s.label} className="p-4 rounded-xl bg-white/[0.03] border border-surface-border text-center">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">{s.label}</p>
+                      <div key={s.label} className="p-4 rounded-xl bg-surface-wash border border-surface-border text-center">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">{s.label}</p>
                         <p className={`text-sm font-black ${s.color} capitalize`}>{s.value}</p>
                       </div>
                     ))}
                   </div>
 
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-surface-border mb-5">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">File Size</p>
+                  <div className="p-4 rounded-xl bg-surface-wash border border-surface-border mb-5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">File Size</p>
                     <p className="text-sm font-bold text-foreground">{formatFileSize(selectedDoc.file_size)}</p>
                   </div>
 
                   <div className="flex gap-3">
                     <button
                       onClick={() => { setQueryText(""); setSelectedDoc(null); }}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#6D4AE2]/20 hover:bg-[#6D4AE2]/30 text-[#818CF8] text-[11px] font-black uppercase tracking-wider transition-all"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent-glow text-[11px] font-black uppercase tracking-wider transition-all"
                     >
                       <Bot size={13} />
                       Test with AI
@@ -464,14 +464,14 @@ export default function KnowledgeBase() {
                       <>
                         <button
                           onClick={() => { setEditingDoc(selectedDoc); loadDocumentChunks(selectedDoc.id); }}
-                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[11px] font-black uppercase tracking-wider transition-all"
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-wash hover:bg-surface-wash border border-border text-foreground text-[11px] font-black uppercase tracking-wider transition-all"
                         >
                           <Edit3 size={13} />
                           Edit Content
                         </button>
                         <button
                           onClick={(e) => handleDelete(selectedDoc.id, e)}
-                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-wider transition-all"
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--error-surface)] hover:bg-[var(--error-surface)] text-[var(--error-foreground)] text-[11px] font-black uppercase tracking-wider transition-all"
                         >
                           <Trash2 size={13} />
                           Delete
@@ -484,32 +484,32 @@ export default function KnowledgeBase() {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-[2rem] border border-surface-border bg-white/[0.02] p-7"
+                  className="rounded-[2rem] border border-surface-border bg-surface-wash p-7"
                 >
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="text-sm font-black uppercase tracking-widest text-foreground">AI Response</h3>
-                    <button onClick={() => setQueryResult(null)} className="p-1.5 text-slate-500 hover:text-white transition-colors">
+                    <button onClick={() => setQueryResult(null)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
                       <X size={15} />
                     </button>
                   </div>
                   <div className="flex items-center gap-3 mb-5">
-                    <span className="text-[10px] font-black px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg uppercase tracking-wider">
+                    <span className="text-[10px] font-black px-2.5 py-1 bg-[var(--success-surface)] border border-[var(--success-border)] text-[var(--success-foreground)] rounded-lg uppercase tracking-wider">
                       Confidence: {Math.round(queryResult.confidence * 100)}%
                     </span>
-                    <span className="text-[10px] font-black px-2.5 py-1 bg-[#6D4AE2]/10 border border-[#818CF8]/20 text-[#818CF8] rounded-lg uppercase tracking-wider">
+                    <span className="text-[10px] font-black px-2.5 py-1 bg-accent/10 border border-accent-glow/20 text-accent-glow rounded-lg uppercase tracking-wider">
                       {queryResult.chunks_used} chunks matched
                     </span>
                   </div>
-                  <div className="p-5 bg-gradient-to-br from-[#6D4AE2]/10 to-transparent border border-[#6D4AE2]/20 rounded-2xl text-sm leading-relaxed text-slate-200 mb-5">
+                  <div className="p-5 bg-gradient-to-br from-accent/10 to-transparent border border-accent/20 rounded-2xl text-sm leading-relaxed text-on-accent mb-5">
                     {queryResult.answer}
                   </div>
                   {queryResult.sources.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Sources</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Sources</p>
                       <div className="flex flex-wrap gap-2">
                         {queryResult.sources.map((src, i) => (
-                          <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-surface-border rounded-lg text-[10px] font-bold text-slate-300">
-                            <BookOpen size={10} className="text-[#818CF8]" />
+                          <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-wash border border-surface-border rounded-lg text-[10px] font-bold text-muted-foreground">
+                            <BookOpen size={10} className="text-accent-glow" />
                             {src}
                           </div>
                         ))}
@@ -518,7 +518,7 @@ export default function KnowledgeBase() {
                   )}
                 </motion.div>
               ) : (
-                <div className="h-full min-h-[300px] rounded-[2rem] border border-dashed border-surface-border flex flex-col items-center justify-center gap-4 text-slate-600">
+                <div className="h-full min-h-[300px] rounded-[2rem] border border-dashed border-surface-border flex flex-col items-center justify-center gap-4 text-muted-foreground">
                   <Eye size={36} strokeWidth={1.5} />
                   <div className="text-center">
                     <p className="text-[12px] font-black uppercase tracking-widest mb-1">Select a document</p>
@@ -531,9 +531,9 @@ export default function KnowledgeBase() {
 
           {/* Query loading state */}
           {queryLoading && (
-            <div className="mt-6 p-6 rounded-2xl border border-surface-border bg-white/[0.02] flex items-center gap-4">
-              <div className="w-6 h-6 border-2 border-[#818CF8] border-t-transparent rounded-full animate-spin shrink-0" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Searching knowledge base...</span>
+            <div className="mt-6 p-6 rounded-2xl border border-surface-border bg-surface-wash flex items-center gap-4">
+              <div className="w-6 h-6 border-2 border-accent-glow border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Searching knowledge base...</span>
             </div>
           )}
 
@@ -544,16 +544,16 @@ export default function KnowledgeBase() {
       <AnimatePresence>
         {editingDoc && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-white/10 bg-[#130E22] shadow-2xl flex flex-col overflow-hidden">
+            <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-surface shadow-2xl flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-border">
                 <div>
-                  <h2 className="text-base font-black text-white">Edit Document Content</h2>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{editingDoc.filename} — {editingChunks.length} chunks</p>
+                  <h2 className="text-base font-black text-foreground">Edit Document Content</h2>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{editingDoc.filename} — {editingChunks.length} chunks</p>
                 </div>
                 <button
                   onClick={() => { setEditingDoc(null); setEditingChunks([]); }}
-                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-wash rounded-lg transition-all"
                 >
                   <X size={16} />
                 </button>
@@ -563,10 +563,10 @@ export default function KnowledgeBase() {
               <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
                 {loadingChunks ? (
                   <div className="flex justify-center py-12">
-                    <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : editingChunks.length === 0 ? (
-                  <p className="text-xs text-center text-slate-500 py-8">No chunks found in this document.</p>
+                  <p className="text-xs text-center text-muted-foreground py-8">No chunks found in this document.</p>
                 ) : (
                   editingChunks.map((chunk, idx) => (
                     <ChunkEditor
@@ -597,19 +597,19 @@ function ChunkEditor({ chunk, index, saving, onSave }: {
   const [isDirty, setIsDirty] = useState(false);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-xl border border-border bg-surface-wash p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
           Chunk {index + 1} · Page {chunk.page_number || "?"}
         </span>
         {isDirty && (
           <button
             onClick={() => { onSave(content); setIsDirty(false); }}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent hover:bg-accent-hover text-on-accent text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
           >
             {saving ? (
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-on-accent border-t-transparent rounded-full animate-spin" />
             ) : (
               <Save size={11} />
             )}
@@ -621,10 +621,10 @@ function ChunkEditor({ chunk, index, saving, onSave }: {
         value={content}
         onChange={(e) => { setContent(e.target.value); setIsDirty(e.target.value !== chunk.content); }}
         rows={4}
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-gray-200 focus:border-purple-500 focus:outline-none resize-y transition-all"
+        className="w-full bg-surface-wash border border-border rounded-lg px-3 py-2 text-[12px] text-foreground focus:border-accent focus:outline-none resize-y transition-all"
       />
       {isDirty && (
-        <p className="text-[10px] text-yellow-400 mt-1">
+        <p className="text-[10px] text-[var(--warning)] mt-1">
           ⚠ Unsaved changes — save to re-index this chunk in the RAG system
         </p>
       )}

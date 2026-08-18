@@ -10,20 +10,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.config import settings
 from app.services.email_poller import run_email_poll
 from app.services.email_service import send_email
-from scripts.verify_email_auto_mode_live import find_database_result, find_reply
+from scripts.verify_email_auto_mode_live import (
+    email_test_context,
+    find_database_result,
+    find_reply,
+)
 
 
-def main():
+def main(business_id):
+    context = email_test_context(business_id)
     marker = datetime.now().strftime("%Y%m%d-%H%M%S")
     subject = f"HaqDesk Business Hours Formatting Test {marker}"
     body = (
-        "<p>Hello TechSuru,</p>"
+        f"<p>Hello {context['business_name']},</p>"
         "<p>Please confirm your standard business hours. What time do you "
         "open and close, and which days are you available?</p>"
         f"<p>Test marker: {marker}</p>"
     )
     print(f"TEST_SUBJECT={subject}")
-    if not send_email(settings.TECHSURU_IMAP_EMAIL, subject, body):
+    if not send_email(context["email"], subject, body):
         raise RuntimeError("Initial SMTP test email was not accepted")
 
     database_result = None
@@ -31,7 +36,9 @@ def main():
     for attempt in range(1, 7):
         time.sleep(10)
         run_email_poll()
-        database_result = find_database_result(subject)
+        database_result = find_database_result(
+            subject, business_id, settings.MAIL_USERNAME
+        )
         reply_result = find_reply(subject)
         print(
             f"attempt={attempt} "
@@ -61,4 +68,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--business-id", required=True, type=int)
+    args = parser.parse_args()
+    main(args.business_id)

@@ -28,7 +28,7 @@ def usable_customer_name(value: str):
     return name
 
 
-def ensure_signature(value: str, business_name: str = "TechSuru") -> str:
+def ensure_signature(value: str, business_name: str) -> str:
     """Guarantee one consistent plain-text support signature."""
     text = structured_plain_text(value)
     text = re.sub(
@@ -37,7 +37,9 @@ def ensure_signature(value: str, business_name: str = "TechSuru") -> str:
         text,
         flags=re.IGNORECASE,
     ).rstrip()
-    signature = f"Best regards,\n{business_name} Support Team"
+    name = (business_name or "").strip()
+    signature_name = f"{name} Support Team" if name else "Support Team"
+    signature = f"Best regards,\n{signature_name}"
     return f"{text}\n\n{signature}" if text else signature
 
 

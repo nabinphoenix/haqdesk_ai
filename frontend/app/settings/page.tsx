@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Building2, Link2, Bell, Shield, CheckCircle2, Zap } from "lucide-react";
+import { Save, Building2, Link2, Bell, Shield, CheckCircle2, Eye, Facebook, Instagram, Mail, Rocket, Smartphone, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithAuth } from "@/lib/api";
 import PasswordField from "@/components/ui/PasswordField";
@@ -187,7 +187,7 @@ export default function SettingsPage() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-surface-border rounded-lg text-[#818CF8] text-[9px] font-black uppercase tracking-widest mb-4"
+                className="inline-flex items-center gap-2 px-3 py-1 bg-surface-wash border border-surface-border rounded-lg text-accent-glow text-[9px] font-black uppercase tracking-widest mb-4"
               >
                 <Zap size={12} strokeWidth={3} />
                 Configuration
@@ -205,7 +205,7 @@ export default function SettingsPage() {
 
             {/* Sidebar */}
             <div className="lg:w-56 shrink-0">
-              <div className="rounded-[2rem] border border-surface-border bg-white/[0.02] p-3 space-y-1">
+              <div className="rounded-[2rem] border border-surface-border bg-surface-wash p-3 space-y-1">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -214,8 +214,8 @@ export default function SettingsPage() {
                       onClick={() => setActiveTab(tab.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[12px] font-bold transition-all text-left ${
                         activeTab === tab.id
-                          ? "bg-[#6D4AE2]/20 text-[#818CF8] border border-[#6D4AE2]/30"
-                          : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          ? "bg-accent/20 text-accent-glow border border-accent/30"
+                          : "text-muted-foreground hover:bg-surface-wash hover:text-foreground"
                       }`}
                     >
                       <Icon size={15} />
@@ -227,34 +227,34 @@ export default function SettingsPage() {
             </div>
 
             {/* Content panel */}
-            <div className="flex-1 rounded-[2rem] border border-surface-border bg-white/[0.02] p-8">
+            <div className="flex-1 rounded-[2rem] border border-surface-border bg-surface-wash p-8">
 
               {activeTab === "business" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground mb-6">Business Profile</h2>
                   
                   {/* AI Response Automation Mode Card */}
-                  <div className="p-5 rounded-2xl border border-[#6D4AE2]/30 bg-gradient-to-r from-[#6D4AE2]/10 to-transparent space-y-3">
+                  <div className="p-5 rounded-2xl border border-accent/30 bg-gradient-to-r from-accent/10 to-transparent space-y-3">
                     <div className="flex items-center gap-2">
-                      <Zap size={16} className="text-[#818CF8]" />
+                      <Zap size={16} className="text-accent-glow" />
                       <span className="text-[11px] font-black uppercase tracking-widest text-foreground">AI Response Automation Mode</span>
                     </div>
-                    <p className="text-xs text-slate-300">Choose how AI handles incoming customer messages across connected social channels:</p>
+                    <p className="text-xs text-muted-foreground">Choose how AI handles incoming customer messages across connected social channels:</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <button
                         type="button"
                         onClick={() => setBusinessData(prev => ({ ...prev, ai_response_mode: "review" }))}
                         className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
                           businessData.ai_response_mode === "review"
-                            ? "bg-[#6D4AE2]/20 border-[#818CF8] text-white shadow-md shadow-purple-950/20"
-                            : "bg-white/5 border-surface-border text-slate-400 hover:bg-white/10"
+                            ? "bg-accent/20 border-accent-glow text-on-accent shadow-md shadow-purple-950/20"
+                            : "bg-surface-wash border-surface-border text-muted-foreground hover:bg-surface-wash"
                         }`}
                       >
                         <div className="font-bold text-xs flex items-center justify-between">
-                          <span>👁️ Review Mode (Manual)</span>
-                          {businessData.ai_response_mode === "review" && <CheckCircle2 size={14} className="text-[#818CF8]" />}
+                          <span className="flex items-center gap-2"><Eye size={14} />Review Mode (Manual)</span>
+                          {businessData.ai_response_mode === "review" && <CheckCircle2 size={14} className="text-accent-glow" />}
                         </div>
-                        <span className="text-[10px] text-slate-400 mt-2 block">AI generates draft suggestions. Agents review, edit, and click send.</span>
+                        <span className="text-[10px] text-muted-foreground mt-2 block">AI generates draft suggestions. Agents review, edit, and click send.</span>
                       </button>
 
                       <button
@@ -262,78 +262,78 @@ export default function SettingsPage() {
                         onClick={() => setBusinessData(prev => ({ ...prev, ai_response_mode: "auto" }))}
                         className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
                           businessData.ai_response_mode === "auto"
-                            ? "bg-emerald-500/20 border-emerald-400 text-white shadow-md shadow-emerald-950/20"
-                            : "bg-white/5 border-surface-border text-slate-400 hover:bg-white/10"
+                            ? "bg-[var(--success-surface)] border-[var(--success-border)] text-[var(--success-foreground)] shadow-md"
+                            : "bg-surface-wash border-surface-border text-muted-foreground hover:bg-surface-wash"
                         }`}
                       >
                         <div className="font-bold text-xs flex items-center justify-between">
-                          <span>🚀 Auto AI Mode (Instant)</span>
-                          {businessData.ai_response_mode === "auto" && <CheckCircle2 size={14} className="text-emerald-400" />}
+                          <span className="flex items-center gap-2"><Rocket size={14} />Auto AI Mode (Instant)</span>
+                          {businessData.ai_response_mode === "auto" && <CheckCircle2 size={14} className="text-[var(--success-foreground)]" />}
                         </div>
-                        <span className="text-[10px] text-slate-400 mt-2 block">AI automatically responds to customer queries instantly 24/7 without agent approval.</span>
+                        <span className="text-[10px] text-muted-foreground mt-2 block">AI automatically responds to customer queries instantly 24/7 without agent approval.</span>
                       </button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Business Name</label>
+                      <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Business Name</label>
                       <input
                         type="text"
                         value={businessData.name}
                         onChange={(e) => setBusinessData(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-surface-wash text-foreground text-sm placeholder-slate-500 focus:border-accent-glow/50 focus:bg-surface/[0.08] outline-none transition-all"
                         placeholder="Your business name"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Business Email</label>
+                      <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Business Email</label>
                       <input
                         type="email"
                         value={businessData.email}
                         onChange={(e) => setBusinessData(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-surface-wash text-foreground text-sm placeholder-slate-500 focus:border-accent-glow/50 focus:bg-surface/[0.08] outline-none transition-all"
                         placeholder="business@example.com"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Website</label>
+                      <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Website</label>
                       <input
                         type="text"
                         value={businessData.website}
                         onChange={(e) => setBusinessData(prev => ({ ...prev, website: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-surface-wash text-foreground text-sm placeholder-slate-500 focus:border-accent-glow/50 focus:bg-surface/[0.08] outline-none transition-all"
                         placeholder="https://yourwebsite.com"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Phone</label>
+                      <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Phone</label>
                       <input
                         type="text"
                         value={businessData.phone}
                         onChange={(e) => setBusinessData(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-surface-wash text-foreground text-sm placeholder-slate-500 focus:border-accent-glow/50 focus:bg-surface/[0.08] outline-none transition-all"
                         placeholder="+977 98XXXXXXXX"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-[#818CF8] uppercase tracking-widest mb-1.5">Description</label>
+                    <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Description</label>
                     <textarea
                       rows={3}
                       value={businessData.description}
                       onChange={(e) => setBusinessData(prev => ({ ...prev, description: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-white/5 text-foreground text-sm placeholder-slate-500 focus:border-[#818CF8]/50 focus:bg-white/[0.08] outline-none transition-all resize-none"
+                      className="w-full px-4 py-3 rounded-2xl border border-surface-border bg-surface-wash text-foreground text-sm placeholder-slate-500 focus:border-accent-glow/50 focus:bg-surface/[0.08] outline-none transition-all resize-none"
                       placeholder="Brief description of your business"
                     />
                   </div>
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow"
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-accent hover:bg-accent-hover text-on-accent text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow"
                   >
                     {saving ? (
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 border-2 border-on-accent border-t-transparent rounded-full animate-spin" />
                     ) : saved ? (
                       <CheckCircle2 size={14} />
                     ) : (
@@ -351,9 +351,10 @@ export default function SettingsPage() {
                     {["facebook", "instagram", "whatsapp", "email"].map(platform => {
                       const integration = integrations.find(i => i.platform === platform);
                       const isConnected = !!integration && integration.status === "active";
-                      const icons: any = {
-                        facebook: "📘", instagram: "📸", whatsapp: "📱", email: "📧"
+                      const icons: Record<string, typeof Facebook> = {
+                        facebook: Facebook, instagram: Instagram, whatsapp: Smartphone, email: Mail
                       };
+                      const PlatformIcon = icons[platform];
                       const names: any = {
                         facebook: "Facebook Messenger",
                         instagram: "Instagram Direct",
@@ -367,15 +368,15 @@ export default function SettingsPage() {
                         email: "Send and receive emails from your custom support address"
                       };
                       return (
-                        <div key={platform} className="flex items-center justify-between p-5 rounded-2xl border border-surface-border bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+                        <div key={platform} className="flex items-center justify-between p-5 rounded-2xl border border-surface-border bg-surface-wash hover:bg-surface/[0.04] transition-all">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-surface-border flex items-center justify-center text-xl">
-                              {icons[platform]}
+                            <div className="w-10 h-10 rounded-xl bg-surface-wash border border-surface-border flex items-center justify-center text-xl">
+                              <PlatformIcon size={18} />
                             </div>
                             <div>
                               <p className="text-sm font-bold text-foreground">{names[platform]}</p>
                               {isConnected && integration.page_name ? (
-                                <p className="text-[11px] text-gray-400">Connected: {integration.page_name}</p>
+                                <p className="text-[11px] text-muted-foreground">Connected: {integration.page_name}</p>
                               ) : (
                                 <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{descs[platform]}</p>
                               )}
@@ -387,8 +388,8 @@ export default function SettingsPage() {
                             disabled={connectingPlatform === platform}
                             className={`text-[10px] font-black px-3 py-2 rounded-full border transition-all ${
                             isConnected
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-[#6D4AE2]/20 text-[#A5B4FC] border-[#6D4AE2]/40 hover:bg-[#6D4AE2]/30"
+                              ? "bg-[var(--success-surface)] text-[var(--success-foreground)] border-[var(--success-border)]"
+                              : "bg-accent/20 text-accent-glow border-accent/40 hover:bg-accent/30"
                           }`}>
                             {connectingPlatform === platform
                               ? "Connecting..."
@@ -401,10 +402,10 @@ export default function SettingsPage() {
                     })}
                   </div>
                   {showEmailSetup && (
-                    <div className="mt-5 p-5 rounded-2xl border border-[#6D4AE2]/30 bg-[#6D4AE2]/10 space-y-4">
+                    <div className="mt-5 p-5 rounded-2xl border border-accent/30 bg-accent/10 space-y-4">
                       <div>
                         <p className="text-sm font-bold text-foreground">Connect Gmail support inbox</p>
-                        <p className="text-[11px] text-slate-400 mt-1">
+                        <p className="text-[11px] text-muted-foreground mt-1">
                           Use a Google App Password, not your normal Gmail password.
                           IMAP must be enabled for this mailbox.
                         </p>
@@ -414,7 +415,7 @@ export default function SettingsPage() {
                         value={emailSetup.email}
                         onChange={event => setEmailSetup(prev => ({ ...prev, email: event.target.value }))}
                         placeholder="support@yourbusiness.com"
-                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-white/5 text-sm text-foreground outline-none"
+                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-surface-wash text-sm text-foreground outline-none"
                       />
                       <PasswordField
                         id="settings-email-app-password"
@@ -428,14 +429,14 @@ export default function SettingsPage() {
                           type="button"
                           onClick={configureEmail}
                           disabled={!emailSetup.email || !emailSetup.app_password || connectingPlatform === "email"}
-                          className="px-4 py-2 rounded-xl bg-[#6D4AE2] text-white text-[11px] font-bold disabled:opacity-50"
+                          className="px-4 py-2 rounded-xl bg-accent text-on-accent text-[11px] font-bold disabled:opacity-50"
                         >
                           {connectingPlatform === "email" ? "Validating..." : "Validate & Connect"}
                         </button>
                         <button
                           type="button"
                           onClick={() => setShowEmailSetup(false)}
-                          className="px-4 py-2 rounded-xl bg-white/5 text-slate-300 text-[11px] font-bold"
+                          className="px-4 py-2 rounded-xl bg-surface-wash text-muted-foreground text-[11px] font-bold"
                         >
                           Cancel
                         </button>
@@ -457,16 +458,16 @@ export default function SettingsPage() {
                     ].map((item) => {
                       const isOn = notifications[item.key as keyof typeof notifications];
                       return (
-                        <div key={item.key} className="flex items-center justify-between p-4 rounded-2xl border border-surface-border bg-white/[0.02]">
+                        <div key={item.key} className="flex items-center justify-between p-4 rounded-2xl border border-surface-border bg-surface-wash">
                           <div>
                             <p className="text-sm font-bold text-foreground">{item.label}</p>
                             <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>{item.desc}</p>
                           </div>
                           <div
                             onClick={() => toggleNotification(item.key as keyof typeof notifications)}
-                            className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${isOn ? "bg-[#6D4AE2]" : "bg-white/10"}`}
+                            className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${isOn ? "bg-accent" : "bg-surface-wash"}`}
                           >
-                            <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-all ${isOn ? "right-0.5" : "left-0.5"}`} />
+                            <div className={`w-3.5 h-3.5 bg-surface rounded-full absolute top-0.5 transition-all ${isOn ? "right-0.5" : "left-0.5"}`} />
                           </div>
                         </div>
                       );
@@ -481,7 +482,7 @@ export default function SettingsPage() {
                   <PasswordField id="settings-current-password" label="Current Password" placeholder="••••••••" />
                   <PasswordField id="settings-new-password" label="New Password" placeholder="••••••••" />
                   <PasswordField id="settings-confirm-password" label="Confirm New Password" placeholder="••••••••" />
-                  <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#6D4AE2] hover:bg-[#5B3BC7] text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow">
+                  <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-accent hover:bg-accent-hover text-on-accent text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-purple-950/20 hover-glow">
                     <Shield size={14} />
                     Update Password
                   </button>

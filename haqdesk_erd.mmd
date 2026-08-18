@@ -1,0 +1,148 @@
+erDiagram
+    BUSINESSES ||--o{ USERS : employs
+    BUSINESSES ||--o{ INVITATIONS : issues
+    BUSINESSES ||--o{ INTEGRATIONS : configures
+    BUSINESSES ||--o{ CUSTOMERS : serves
+    BUSINESSES ||--o{ CUSTOMER_IDENTITIES : owns
+    BUSINESSES ||--o{ CONVERSATIONS : contains
+    BUSINESSES ||--o{ KNOWLEDGE_DOCUMENTS : uploads
+    BUSINESSES ||--o{ KNOWLEDGE_CHUNKS : isolates
+    USERS o|--o{ CONVERSATIONS : assigned_to
+    USERS o|--o{ CUSTOMER_IDENTITIES : links
+    CUSTOMERS ||--o{ CONVERSATIONS : starts
+    CUSTOMERS ||--o{ CUSTOMER_IDENTITIES : master_customer
+    CUSTOMERS ||--o| CUSTOMER_IDENTITIES : linked_customer
+    CUSTOMERS o|--o{ CUSTOMERS : merged_into
+    CUSTOMERS o|--o{ CUSTOMERS : potential_match
+    CONVERSATIONS ||--o{ MESSAGES : contains
+    KNOWLEDGE_DOCUMENTS ||--o{ KNOWLEDGE_CHUNKS : splits_into
+    KNOWLEDGE_CHUNKS ||..|| QDRANT_POINTS : indexed_as
+
+    BUSINESSES {
+        int id PK
+        string name
+        string email
+        string phone
+        text description
+        string logo_url
+        string website
+        boolean is_active
+        string ai_response_mode
+        datetime created_at
+        datetime updated_at
+    }
+    USERS {
+        int id PK
+        int business_id FK
+        string name
+        string email
+        string hashed_password
+        string role
+        string status
+        datetime last_seen_at
+        datetime created_at
+        string provider
+        string google_id
+        string avatar_url
+        boolean email_verified
+    }
+    INVITATIONS {
+        int id PK
+        int business_id FK
+        string email
+        string role
+        string token
+        boolean accepted
+        boolean revoked
+        datetime created_at
+        datetime expires_at
+    }
+    INTEGRATIONS {
+        int id PK
+        int business_id FK
+        string platform
+        string page_id
+        string page_name
+        string access_token
+        string refresh_token
+        datetime expires_at
+        json metadata_json
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+    CUSTOMERS {
+        int id PK
+        int business_id FK
+        string platform
+        string platform_user_id
+        string display_name
+        string phone
+        string email
+        string avatar_url
+        string notes
+        boolean is_merged
+        int merged_into_id FK
+        int potential_match_customer_id FK
+        datetime last_seen
+        datetime created_at
+    }
+    CUSTOMER_IDENTITIES {
+        int id PK
+        int business_id FK
+        int master_customer_id FK
+        int linked_customer_id FK_UQ
+        int linked_by_user_id FK
+        datetime created_at
+    }
+    CONVERSATIONS {
+        int id PK
+        int business_id FK
+        int customer_id FK
+        int assigned_agent_id FK
+        string status
+        string priority
+        boolean is_deleted
+        datetime deleted_at
+        datetime created_at
+        datetime closed_at
+        datetime last_read_at
+    }
+    MESSAGES {
+        int id PK
+        int conversation_id FK
+        string sender_type
+        int sender_id
+        text content
+        string message_type
+        string platform
+        datetime timestamp
+        text ai_draft
+        string ai_language
+        string sentiment
+        json ai_metadata
+    }
+    KNOWLEDGE_DOCUMENTS {
+        int id PK
+        int business_id FK
+        string filename
+        string status
+        datetime uploaded_at
+    }
+    KNOWLEDGE_CHUNKS {
+        int id PK
+        int document_id FK
+        int business_id FK
+        text content
+        int page_number
+    }
+    QDRANT_POINTS {
+        int point_id "KnowledgeChunk.id"
+        vector embedding "BAAI/bge-m3, 1024-dim"
+        int business_id "payload"
+        int document_id "payload"
+        int chunk_id "payload"
+        text content "payload"
+        int page_number "payload"
+        string filename "payload"
+    }

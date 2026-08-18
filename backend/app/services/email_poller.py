@@ -289,7 +289,7 @@ def poll_emails_for_business(
                     conversation_id=conversation.id,
                     sender_type="customer",
                     sender_id=None,
-                    content=f"📧 {subject}\n\nFrom: {sender_email}\n\n{body}",
+                    content=f"📧 {subject}\n\nFrom: {sender_email}\n\n{body}\n\n[msg-id:{message_id}]",
                     platform="email",
                     message_type="text",
                 )
@@ -339,15 +339,29 @@ def poll_emails_for_business(
                     conversation.id,
                     business_id,
                 )
-                asyncio.run(
-                    process_incoming_message_in_background(
+                try:
+                    # asyncio.run() creates a fresh event loop, safe to call
+                    # from a background thread that has no running loop.
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(
+                            process_incoming_message_in_background(
+                                new_message.id,
+                                conversation.id,
+                                body,
+                                business_id,
+                                reply_subject=f"Re: {subject}",
+                            )
+                        )
+                    finally:
+                        loop.close()
+                except Exception as pipeline_err:
+                    logger.exception(
+                        "[EMAIL POLL] AI pipeline failed for message %s: %s",
                         new_message.id,
-                        conversation.id,
-                        body,
-                        business_id,
-                        reply_subject=f"Re: {subject}",
+                        pipeline_err,
                     )
-                )
 
             except Exception as e:
                 logger.exception(
@@ -374,7 +388,6 @@ def build_email_poll_configs(db):
         Integration.platform == "email",
         Integration.status == "active",
     ).all()
-    configured_business_ids = set()
     configs = []
     for integration in integrations:
         metadata = integration.metadata_json or {}
@@ -388,28 +401,12 @@ def build_email_poll_configs(db):
                 "imap_host": metadata.get("imap_host", "imap.gmail.com"),
                 "imap_port": int(metadata.get("imap_port", 993)),
             })
-            configured_business_ids.add(integration.business_id)
         except Exception as exc:
             logger.error(
                 "[EMAIL POLL] Invalid stored email integration %s: %s",
                 integration.id,
                 exc,
             )
-
-    # Preserve TechSuru until its working environment configuration is
-    # intentionally migrated into the integrations table.
-    if (
-        1 not in configured_business_ids
-        and settings.TECHSURU_IMAP_EMAIL
-        and settings.TECHSURU_IMAP_PASSWORD
-    ):
-        configs.append({
-            "business_id": 1,
-            "imap_email": settings.TECHSURU_IMAP_EMAIL,
-            "imap_password": settings.TECHSURU_IMAP_PASSWORD,
-            "imap_host": settings.TECHSURU_IMAP_HOST,
-            "imap_port": settings.TECHSURU_IMAP_PORT,
-        })
     return configs
 
 
