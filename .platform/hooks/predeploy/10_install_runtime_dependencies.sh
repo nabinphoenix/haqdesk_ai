@@ -21,9 +21,10 @@ fi
 python3.11 -m venv "$APP_ROOT/.venv"
 "$APP_ROOT/.venv/bin/python" -m pip install --upgrade pip
 
-# EB instances do not have GPUs. Install the CPU wheel explicitly so an
-# unpinned PyPI torch release cannot pull several gigabytes of CUDA packages.
-"$APP_ROOT/.venv/bin/pip" install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.12.1+cpu"
+# EB instances do not have GPUs. Install a direct CPU-only wheel so pip does
+# not resolve the generic PyPI Torch release and its CUDA packages.
+CPU_TORCH_WHEEL="https://download-r2.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl"
+"$APP_ROOT/.venv/bin/pip" install --no-cache-dir "$CPU_TORCH_WHEEL"
 
 # Install the remaining backend dependencies without allowing the generic
 # torch requirement to replace the CPU-only wheel above.
