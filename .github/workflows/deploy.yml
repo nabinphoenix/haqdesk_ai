@@ -92,11 +92,30 @@ jobs:
 
       - name: Deploy to Elastic Beanstalk
         run: |
+          set -euo pipefail
           aws elasticbeanstalk update-environment \
             --application-name "$EB_APPLICATION_NAME" \
             --environment-name "$EB_ENVIRONMENT_NAME" \
             --version-label "haqdesk-${GITHUB_SHA}"
-          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENVIRONMENT_NAME"
+
+          # The EB hook installs the CPU-only ML runtime and can take longer
+          # than the AWS CLI waiter's default ten-minute limit on t3.small.
+          for attempt in $(seq 1 40); do
+            environment_status="$(aws elasticbeanstalk describe-environments \
+              --application-name "$EB_APPLICATION_NAME" \
+              --environment-names "$EB_ENVIRONMENT_NAME" \
+              --query 'Environments[0].Status' \
+              --output text)"
+            echo "Elastic Beanstalk status: ${environment_status} (poll ${attempt}/40)"
+            if [ "$environment_status" = "Ready" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "Elastic Beanstalk did not become Ready within 20 minutes."
+              exit 1
+            fi
+            sleep 30
+          done
 
       - name: Verify deployed HaqDesk endpoints
         run: |
