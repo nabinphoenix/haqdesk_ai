@@ -81,8 +81,20 @@ async def health_preflight():
 
 @app.on_event("startup")
 async def startup_event():
-    # Keep local/development databases compatible without requiring a full
-    # migration framework. Presence uses this timestamp to expire stale users.
+    # A fresh RDS database has no tables. Populate the complete SQLAlchemy
+    # metadata before applying additive compatibility migrations below.
+    # Importing every model is intentional: Base only knows about models that
+    # have been imported into this process.
+    import app.models  # noqa: F401
+    from app.models.internal_messaging import InternalThread, InternalThreadParticipant, InternalMessage
+    from app.models.faq_opportunity import FAQOpportunityFeedback
+    from app.models.knowledge import KnowledgeIngestionJob, AgentReplyFeedback
+    from app.core.database import Base
+
+    Base.metadata.create_all(bind=engine)
+
+    # Keep existing databases compatible without requiring a full migration
+    # framework. Presence uses this timestamp to expire stale users.
     with engine.begin() as connection:
         connection.execute(text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE"
@@ -104,11 +116,6 @@ async def startup_event():
             ))
         connection.execute(text("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN"))
         connection.execute(text("UPDATE knowledge_documents SET source_type = 'upload' WHERE source_type IS NULL"))
-    from app.models.internal_messaging import InternalThread, InternalThreadParticipant, InternalMessage
-    from app.models.faq_opportunity import FAQOpportunityFeedback
-    from app.models.knowledge import KnowledgeIngestionJob, AgentReplyFeedback
-    from app.core.database import Base
-    Base.metadata.create_all(bind=engine, tables=[InternalThread.__table__, InternalThreadParticipant.__table__, InternalMessage.__table__, FAQOpportunityFeedback.__table__, KnowledgeIngestionJob.__table__, AgentReplyFeedback.__table__])
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE agent_reply_feedback ADD COLUMN IF NOT EXISTS knowledge_document_id INTEGER"))
     # Re-queue legacy processing documents so failed uploads are recoverable.
