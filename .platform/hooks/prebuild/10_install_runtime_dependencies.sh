@@ -2,6 +2,8 @@
 set -euo pipefail
 
 APP_ROOT="/var/app/staging"
+export TMPDIR="$APP_ROOT/.pip-tmp"
+mkdir -p "$TMPDIR"
 
 if ! command -v python3 >/dev/null 2>&1; then
   dnf install -y python3
