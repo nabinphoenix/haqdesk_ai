@@ -105,6 +105,31 @@ jobs:
         run: |
           set -euo pipefail
           target_version="haqdesk-${GITHUB_SHA}"
+
+          # A previous deployment can remain in EB's Updating state briefly
+          # after it has failed or an instance has been replaced. Starting a
+          # second update in that window makes the AWS CLI exit immediately.
+          for attempt in $(seq 1 40); do
+            environment_status="$(aws elasticbeanstalk describe-environments \
+              --application-name "$EB_APPLICATION_NAME" \
+              --environment-names "$EB_ENVIRONMENT_NAME" \
+              --query 'Environments[0].Status' \
+              --output text)"
+            echo "Elastic Beanstalk status before deployment: ${environment_status} (poll ${attempt}/40)"
+            if [ "$environment_status" = "Ready" ]; then
+              break
+            fi
+            if [ "$environment_status" = "Terminated" ] || [ "$environment_status" = "Terminating" ]; then
+              echo "Elastic Beanstalk entered terminal status: ${environment_status}."
+              exit 1
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "Elastic Beanstalk did not become ready within 20 minutes."
+              exit 1
+            fi
+            sleep 30
+          done
+
           aws elasticbeanstalk update-environment \
             --application-name "$EB_APPLICATION_NAME" \
             --environment-name "$EB_ENVIRONMENT_NAME" \
