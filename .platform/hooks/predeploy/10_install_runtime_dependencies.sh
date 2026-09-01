@@ -44,4 +44,18 @@ fi
 
 ln -sfn "$RUNTIME_VENV" "$APP_ROOT/.venv"
 
-npm --prefix "$APP_ROOT/frontend" ci --no-audit --no-fund || npm --prefix "$APP_ROOT/frontend" install --no-audit --no-fund
+# Keep frontend dependencies outside the versioned source tree as well. This
+# avoids re-downloading the same packages while the EB deployment command is
+# holding the application offline. A new instance performs one install, then
+# later version swaps reuse it.
+RUNTIME_NODE_MODULES="/var/app/haqdesk-node-modules"
+if [ ! -d "$RUNTIME_NODE_MODULES" ]; then
+  if [ -d /var/app/current/frontend/node_modules ]; then
+    mv /var/app/current/frontend/node_modules "$RUNTIME_NODE_MODULES"
+  else
+    npm --prefix "$APP_ROOT/frontend" ci --no-audit --no-fund || npm --prefix "$APP_ROOT/frontend" install --no-audit --no-fund
+    mv "$APP_ROOT/frontend/node_modules" "$RUNTIME_NODE_MODULES"
+  fi
+fi
+
+ln -sfn "$RUNTIME_NODE_MODULES" "$APP_ROOT/frontend/node_modules"
