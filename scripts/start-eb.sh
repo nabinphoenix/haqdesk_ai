@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Configuration-only Elastic Beanstalk updates can replace the current
+# application directory without running the hook that creates the .venv link.
+# Recreate that link from the shared runtime when it is missing.
+if [ ! -e /var/app/current/.venv ] && [ -d /var/app/haqdesk-venv ]; then
+  ln -s /var/app/haqdesk-venv /var/app/current/.venv
+fi
 set -euo pipefail
 
 APP_ROOT="/var/app/current"
