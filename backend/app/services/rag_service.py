@@ -7,7 +7,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, PointStruct,
     Filter, FieldCondition, MatchValue,
-    SearchRequest
 )
 from sqlalchemy.orm import Session
 from app.core.config import settings

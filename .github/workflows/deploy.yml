@@ -5,6 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Elastic Beanstalk accepts one environment update at a time. Keep a newer
+# push from racing an in-flight deployment and leaving the environment on an
+# older or partially deployed version.
+concurrency:
+  group: haqdesk-production-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -51,7 +58,11 @@ jobs:
         run: npm run build
 
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-cache-dir "https://download-r2.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl"
+          grep -v -E '^[[:space:]]*torch([[:space:]]|$)' backend/requirements.txt > "$RUNNER_TEMP/requirements-no-torch.txt"
+          python -m pip install --no-cache-dir -r "$RUNNER_TEMP/requirements-no-torch.txt"
 
       - name: Run backend tests (currently non-blocking)
         continue-on-error: true
@@ -93,37 +104,35 @@ jobs:
       - name: Deploy to Elastic Beanstalk
         run: |
           set -euo pipefail
-          update_succeeded=false
-          for update_attempt in $(seq 1 5); do
-            if aws elasticbeanstalk update-environment \
-              --application-name "$EB_APPLICATION_NAME" \
-              --environment-name "$EB_ENVIRONMENT_NAME" \
-              --version-label "haqdesk-${GITHUB_SHA}"; then
-              update_succeeded=true
-              break
-            fi
-            echo "Elastic Beanstalk update was not accepted (attempt ${update_attempt}/5); retrying."
-            sleep 30
-          done
-          if [ "$update_succeeded" != true ]; then
-            echo "Elastic Beanstalk did not accept the application update."
-            exit 1
-          fi
+          target_version="haqdesk-${GITHUB_SHA}"
+          aws elasticbeanstalk update-environment \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-name "$EB_ENVIRONMENT_NAME" \
+            --version-label "$target_version"
 
           # The EB hook installs the CPU-only ML runtime and can take longer
           # than the AWS CLI waiter's default ten-minute limit on t3.small.
+          # Do not stop at Status=Ready: EB can report Ready while an older
+          # version is still active after an aborted/concurrent update.
           for attempt in $(seq 1 40); do
-            environment_status="$(aws elasticbeanstalk describe-environments \
+            environment_state="$(aws elasticbeanstalk describe-environments \
               --application-name "$EB_APPLICATION_NAME" \
               --environment-names "$EB_ENVIRONMENT_NAME" \
-              --query 'Environments[0].Status' \
+              --query 'Environments[0].[Status,VersionLabel,Health,HealthStatus]' \
               --output text)"
-            echo "Elastic Beanstalk status: ${environment_status} (poll ${attempt}/40)"
-            if [ "$environment_status" = "Ready" ]; then
+            read -r environment_status deployed_version environment_health health_status <<< "$environment_state"
+            echo "Elastic Beanstalk status: ${environment_status}, version: ${deployed_version}, health: ${environment_health}/${health_status} (poll ${attempt}/40)"
+            if [ "$environment_status" = "Ready" ] && \
+              [ "$deployed_version" = "$target_version" ] && \
+              [ "$health_status" != "Severe" ]; then
               break
             fi
+            if [ "$environment_status" = "Terminated" ] || [ "$environment_status" = "Terminating" ]; then
+              echo "Elastic Beanstalk entered terminal status: ${environment_status}."
+              exit 1
+            fi
             if [ "$attempt" -eq 40 ]; then
-              echo "Elastic Beanstalk did not become Ready within 20 minutes."
+              echo "Elastic Beanstalk did not activate a healthy ${target_version} within 20 minutes."
               exit 1
             fi
             sleep 30
@@ -132,7 +141,7 @@ jobs:
       - name: Verify deployed HaqDesk endpoints
         run: |
           set -euo pipefail
-          frontend_body="$(curl --fail --silent --show-error --retry 10 --retry-delay 10 --retry-all-errors "$PRODUCTION_URL/")"
+          frontend_body="$(curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$PRODUCTION_URL/")"
           printf '%s' "$frontend_body" | grep -Eiq 'HaqDesk AI|HaqDesk'
-          backend_body="$(curl --fail --silent --show-error --retry 10 --retry-delay 10 --retry-all-errors "$PRODUCTION_URL/health")"
+          backend_body="$(curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$PRODUCTION_URL/health")"
           printf '%s' "$backend_body" | grep -Fqi 'Welcome to HaqDesk AI API'
