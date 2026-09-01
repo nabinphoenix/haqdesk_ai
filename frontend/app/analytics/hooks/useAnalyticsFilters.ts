@@ -27,8 +27,12 @@ export function useAnalyticsFilters() {
     value: AnalyticsFilterState[K],
   ) => replace({ ...filters, [key]: value }), [filters, replace]);
 
+  const setFilters = useCallback((next: Partial<AnalyticsFilterState>) => {
+    replace({ ...filters, ...next });
+  }, [filters, replace]);
+
   const resetFilters = useCallback(() => replace(defaults), [defaults, replace]);
   const queryString = useMemo(() => filtersToSearchParams(filters).toString(), [filters]);
 
-  return { filters, setFilter, resetFilters, queryString };
+  return { filters, setFilter, setFilters, resetFilters, queryString };
 }

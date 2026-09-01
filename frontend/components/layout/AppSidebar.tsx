@@ -7,12 +7,41 @@ import { useState, useEffect } from "react";
 import { BarChart3, BookOpen, ChevronDown, Inbox, LogIn, LogOut, Menu, MessageSquare, Plus, Settings, Shield, UserRound, Users, X } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useTheme } from "next-themes";
 
+const PROFILE_IMAGE_CACHE_LIMIT = 256 * 1024;
+
+function readCachedProfileImage(): string | null {
+  try {
+    const cached = localStorage.getItem("profileImage");
+    if (!cached) return null;
+    if (cached.length > PROFILE_IMAGE_CACHE_LIMIT) {
+      localStorage.removeItem("profileImage");
+      return null;
+    }
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+function cacheProfileImage(image: string | null) {
+  try {
+    if (image && image.length <= PROFILE_IMAGE_CACHE_LIMIT) {
+      localStorage.setItem("profileImage", image);
+    } else {
+      localStorage.removeItem("profileImage");
+    }
+  } catch {
+    // A full/private storage area must not break profile updates or navigation.
+    try { localStorage.removeItem("profileImage"); } catch { /* ignore */ }
+  }
+}
 const ALL_NAV_ITEMS = [
-  { name: "Messages", path: "/messages", roles: ["business_admin", "supervisor", "agent"], icon: MessageSquare },
   { name: "Inbox", path: "/inbox", roles: ["business_admin", "supervisor", "agent"], icon: Inbox },
-  { name: "Team", path: "/team", roles: ["business_admin", "supervisor"], icon: Users },
+  { name: "Messages", path: "/messages", roles: ["business_admin", "supervisor", "agent"], icon: MessageSquare },
   { name: "Knowledge", path: "/knowledge", roles: ["business_admin"], icon: BookOpen },
+  { name: "Team", path: "/team", roles: ["business_admin", "supervisor"], icon: Users },
   { name: "Analytics", path: "/analytics", roles: ["business_admin", "supervisor"], icon: BarChart3 },
   { name: "Settings", path: "/settings", roles: ["business_admin"], icon: Settings },
   { name: "Super Admin", path: "/super-admin", roles: ["super_admin"], icon: Shield },
@@ -30,15 +59,28 @@ export default function AppNavbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const { resolvedTheme } = useTheme();
+  const logoSrc = resolvedTheme === "dark"
+    ? "/images/Haqdesk_AI_Dark.png"
+    : "/images/Haqdesk_AI_Light.png";
   const navItems = ALL_NAV_ITEMS.filter(
-    (item) => userRole !== null && item.roles.includes(userRole)
+    (item) => userRole !== null && item.roles.includes(userRole) && item.name !== 'Super Admin'
   );
 
   useEffect(() => {
     setMounted(true);
-    const savedImage = localStorage.getItem("profileImage");
+    const savedImage = readCachedProfileImage();
     if (savedImage) setProfileImage(savedImage);
   }, []);
+
+  useEffect(() => {
+    // Prefer the clean default avatar in the shared navigation. It avoids
+    // broken remote images and stale cached image data on every account.
+    if (profileImage) {
+      setProfileImage(null);
+      cacheProfileImage(null);
+    }
+  }, [profileImage]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -59,9 +101,34 @@ export default function AppNavbar() {
 
       if (token) {
         setIsLoggedIn(true);
-        setUserName(storedName);
-        setUserRole(storedRole);
+        if (storedName) setUserName(storedName);
+        if (storedRole) setUserRole(storedRole);
         setLoading(false);
+
+        // Fetch user profile from backend
+        fetchWithAuth("/api/v1/auth/me")
+          .then((res) => {
+            if (res.ok) {
+              res.json().then((data) => {
+                if (data.role) {
+                  setUserRole(data.role);
+                  localStorage.setItem("userRole", data.role);
+                }
+                if (data.avatar_url) {
+                  setProfileImage(data.avatar_url);
+                  cacheProfileImage(data.avatar_url);
+                }
+                if (data.name) {
+                  setUserName(data.name);
+                  localStorage.setItem("userName", data.name);
+                }
+                // Onboarding is routed only by the one-time Google OAuth response.
+              });
+            }
+          })
+          .catch(() => {
+            // Keep the navigation usable with cached local profile data when the API is restarting.
+          });
       } else {
         setIsLoggedIn(false);
         setUserName(null);
@@ -106,7 +173,7 @@ export default function AppNavbar() {
     router.push("/login");
   };
 
-  const PUBLIC_PAGES = ["/login", "/register", "/accept-invite", "/forgot-password", "/reset-password"];
+  const PUBLIC_PAGES = ["/login", "/register", "/accept-invite", "/forgot-password", "/reset-password", "/onboarding/business"];
   if (PUBLIC_PAGES.some((p) => pathname === p || pathname.startsWith(p + "?"))) return null;
 
   if (!mounted) {
@@ -125,18 +192,18 @@ export default function AppNavbar() {
 
         {/* Brand */}
         <Link href="/" className="flex items-center gap-3 group shrink-0">
-          <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 shrink-0">
+          <div className="h-[50px] w-[50px] overflow-hidden transition-transform group-hover:scale-105 shrink-0">
             <img
-              src="/images/HaqDesk.png"
+              src={logoSrc}
               alt="HaqDesk AI"
               className="w-full h-full object-contain"
             />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="font-heading font-bold text-[15px] tracking-tight text-foreground">
+            <span className="font-heading font-bold text-[15px] tracking-tight text-black dark:text-foreground">
               HaqDesk<span style={{ color: "var(--accent)" }}> AI</span>
             </span>
-            <span className="text-[9.5px] font-medium uppercase tracking-widest text-muted-foreground mt-0.5 hidden sm:block">
+            <span className="text-[9.5px] font-medium uppercase tracking-widest text-black dark:text-muted-foreground mt-0.5 hidden sm:block">
               AI-Powered Support
             </span>
           </div>
@@ -153,8 +220,8 @@ export default function AppNavbar() {
                 href={item.path}
                 className={`${
                   isActive
-                    ? "font-medium text-foreground bg-surface-wash dark:bg-surface-wash"
-                    : "text-muted-foreground hover:text-foreground hover:bg-surface-wash dark:hover:bg-surface-wash"
+                    ? "font-medium text-black dark:text-foreground bg-surface-wash dark:bg-surface-wash"
+                    : "text-black dark:text-muted-foreground hover:text-black dark:hover:text-foreground hover:bg-surface-wash dark:hover:bg-surface-wash"
                 } flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13.5px] transition-colors duration-150`}
               >
                 <Icon size={15} strokeWidth={1.5} className="shrink-0" />
@@ -190,14 +257,14 @@ export default function AppNavbar() {
                       )}
                     </div>
                     <div className="flex flex-col leading-tight text-left">
-                      <span className="text-[13px] font-semibold text-foreground">
+                      <span className="text-[13px] font-semibold text-black dark:text-foreground">
                         {userName || "User"}
                       </span>
-                      <span className="text-[10px] font-medium text-accent-glow uppercase tracking-wider">
+                      <span className="text-[10px] font-medium text-black dark:text-accent-glow uppercase tracking-wider">
                         {userRole || "Admin"}
                       </span>
                     </div>
-                    <ChevronDown size={12} className="text-muted-foreground ml-1" />
+                    <ChevronDown size={12} className="text-black dark:text-muted-foreground ml-1" />
                   </button>
 
                   {/* Dropdown */}
@@ -205,7 +272,7 @@ export default function AppNavbar() {
                     <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-surface shadow-2xl overflow-hidden z-[100]">
                       <button
                         onClick={() => { setShowProfileModal(true); setShowProfileMenu(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-muted-foreground hover:bg-surface-wash hover:text-foreground transition-all text-left"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-black dark:text-muted-foreground hover:bg-surface-wash hover:text-black dark:hover:text-foreground transition-all text-left"
                       >
                         <UserRound size={14} />
                         Edit Profile
@@ -222,7 +289,6 @@ export default function AppNavbar() {
                   )}
                 </div>
 
-
               </div>
             ) : (
               <div className="flex items-center gap-2"><ThemeToggle /><Link
@@ -238,7 +304,7 @@ export default function AppNavbar() {
           <ThemeToggle className="h-[34px] w-[34px]" iconSize={15} />
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-2 text-black dark:text-muted-foreground hover:text-black dark:hover:text-foreground transition-colors"
           >
             {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -265,8 +331,8 @@ export default function AppNavbar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`${
                     isActive
-                      ? "font-medium text-foreground bg-surface-wash dark:bg-surface-wash"
-                      : "text-muted-foreground hover:text-foreground hover:bg-surface-wash dark:hover:bg-surface-wash"
+                      ? "font-medium text-black dark:text-foreground bg-surface-wash dark:bg-surface-wash"
+                      : "text-black dark:text-muted-foreground hover:text-black dark:hover:text-foreground hover:bg-surface-wash dark:hover:bg-surface-wash"
                   } flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13.5px] transition-colors duration-150`}
                 >
                   <Icon size={15} strokeWidth={1.5} className="shrink-0" />
@@ -284,17 +350,17 @@ export default function AppNavbar() {
                     {userName ? userName.charAt(0).toUpperCase() : "N"}
                   </div>
                   <div className="flex flex-col leading-tight">
-                    <span className="text-[13px] font-semibold text-foreground">
+                    <span className="text-[13px] font-semibold text-black dark:text-foreground">
                       {userName || "User"}
                     </span>
-                    <span className="text-[10px] font-medium text-accent-glow uppercase tracking-wider">
+                    <span className="text-[10px] font-medium text-black dark:text-accent-glow uppercase tracking-wider">
                       {userRole || "Admin"}
                     </span>
                   </div>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="rounded-lg p-2 text-muted-foreground hover:bg-surface-wash hover:text-[var(--error-foreground)] transition-all"
+                  className="rounded-lg p-2 text-black dark:text-muted-foreground hover:bg-surface-wash hover:text-[var(--error-foreground)] transition-all"
                 >
                   <LogOut size={16} />
                 </button>
@@ -351,7 +417,7 @@ export default function AppNavbar() {
                         reader.onload = () => {
                           const result = reader.result as string;
                           setProfileImage(result);
-                          localStorage.setItem("profileImage", result);
+                          cacheProfileImage(result);
                         };
                         reader.readAsDataURL(file);
                       }
@@ -384,12 +450,28 @@ export default function AppNavbar() {
             </div>
 
             <button
-              onClick={() => {
+              onClick={async () => {
                 const nameInput = document.getElementById("profile-name-input") as HTMLInputElement;
+                let newName = userName;
                 if (nameInput?.value) {
-                  setUserName(nameInput.value);
-                  localStorage.setItem("userName", nameInput.value);
+                  newName = nameInput.value;
+                  setUserName(newName);
+                  localStorage.setItem("userName", newName);
                 }
+
+                try {
+                  await fetchWithAuth("/api/v1/auth/me", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: newName,
+                      avatar_url: profileImage
+                    }),
+                  });
+                } catch (e) {
+                  console.error("Failed to update profile", e);
+                }
+
                 setShowProfileModal(false);
               }}
               className="w-full rounded-xl bg-accent hover:bg-accent-hover py-2.5 text-[13px] font-semibold text-on-accent transition-all"

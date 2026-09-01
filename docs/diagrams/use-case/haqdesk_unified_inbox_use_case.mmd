@@ -1,0 +1,135 @@
+import fitz  # PyMuPDF
+import os
+
+# Define the Mermaid file content (Monochrome / B&W UML style)
+mermaid_content = """flowchart LR
+    %% HaqDesk AI - Unified Inbox and Customer Support Use Case Diagram (UML 2.5)
+
+    %% Actors
+    subgraph LEFT_ACTORS [ ]
+        direction TB
+        STAFF["Support Staff"]
+        ADMIN["Business Admin"]
+    end
+
+    subgraph RIGHT_ACTORS [ ]
+        direction TB
+        CUST["Customer / End User\\n(External)"]
+        COMM["Communication Platform\\n(External Service)"]
+    end
+
+    %% Actor Generalization
+    ADMIN -- "|generalizes|" --> STAFF
+
+    %% System Boundary
+    subgraph SYS ["HaqDesk AI – Unified Customer Support"]
+        direction TB
+
+        %% Inbound / External Flow
+        subgraph G_EXT ["Channel Ingestion & Dispatch"]
+            UC_DELIVER_IN(["Deliver Incoming Message"]):::usecase
+            UC_DELIVER_OUT(["Deliver Outgoing Response"]):::usecase
+            UC_AUTO_DISPATCH(["Automatically Dispatch AI Response"]):::usecase
+        end
+
+        %% Unified Inbox Navigation & Discovery
+        subgraph G_INBOX ["Unified Inbox Workspace"]
+            UC_ACCESS_INBOX(["Access Unified Inbox"]):::usecase
+            UC_VIEW_CONVS(["View Conversations"]):::usecase
+            UC_FILTER_SEARCH(["Search / Filter Conversations"]):::usecase
+            UC_SELECT_CONV(["Select Conversation"]):::usecase
+        end
+
+        %% Conversation Inspection & Metadata
+        subgraph G_INSPECT ["Conversation Context & Intelligence"]
+            UC_VIEW_HISTORY(["View Conversation History"]):::usecase
+            UC_VIEW_CUSTOMER(["View Customer Details"]):::usecase
+            UC_VIEW_CHANNEL(["View Channel Information"]):::usecase
+            UC_VIEW_SENTIMENT(["View Sentiment"]):::usecase
+            UC_VIEW_PRIORITY(["View Priority / Attention Status"]):::usecase
+        end
+
+        %% Conversation Management & Curation
+        subgraph G_MGMT ["Conversation Curation"]
+            UC_UPDATE_STATUS(["Update Conversation Status"]):::usecase
+            UC_UPDATE_PRIORITY(["Update Conversation Priority"]):::usecase
+            UC_MANAGE_NOTES(["Maintain Customer Notes"]):::usecase
+            UC_MANAGE_LIFECYCLE(["Delete / Restore Conversation"]):::usecase
+        end
+
+        %% AI Assistance & Human-in-the-Loop
+        subgraph G_AI ["AI Assistance & Human-in-the-Loop"]
+            UC_GEN_AI(["Generate AI-Assisted Response"]):::usecase
+            UC_REVIEW_AI(["Review AI Draft"]):::usecase
+            UC_DECIDE_AI(["Accept / Edit / Reject AI Draft"]):::usecase
+            UC_MANUAL_RESP(["Write Manual Response"]):::usecase
+            UC_SEND_RESP(["Send Customer Response"]):::usecase
+        end
+    end
+
+    %% External Customer Use Cases
+    UC_SEND_MSG(["Send Message to Business"]):::usecase
+    UC_RECV_RESP(["Receive Business Response"]):::usecase
+
+    %% Associations - Customer & Platform
+    CUST --- UC_SEND_MSG
+    CUST --- UC_RECV_RESP
+    COMM --- UC_DELIVER_IN
+    COMM --- UC_DELIVER_OUT
+
+    %% Associations - Internal Users
+    STAFF --- UC_ACCESS_INBOX
+    STAFF --- UC_SELECT_CONV
+    STAFF --- UC_UPDATE_STATUS
+    STAFF --- UC_UPDATE_PRIORITY
+    STAFF --- UC_MANAGE_NOTES
+    STAFF --- UC_REVIEW_AI
+    STAFF --- UC_DECIDE_AI
+    STAFF --- UC_MANUAL_RESP
+    STAFF --- UC_SEND_RESP
+
+    ADMIN --- UC_MANAGE_LIFECYCLE
+
+    %% Include / Extend Relationships
+    UC_SEND_MSG -. "<<include>>" .-> UC_DELIVER_IN
+    UC_DELIVER_IN -. "<<include>>" .-> UC_GEN_AI
+    UC_DELIVER_IN -. "<<include>>" .-> UC_VIEW_CONVS
+
+    UC_ACCESS_INBOX -. "<<include>>" .-> UC_VIEW_CONVS
+    UC_FILTER_SEARCH -. "<<extend>>" .-> UC_VIEW_CONVS
+
+    UC_SELECT_CONV -. "<<include>>" .-> UC_VIEW_HISTORY
+    UC_SELECT_CONV -. "<<include>>" .-> UC_VIEW_CUSTOMER
+    UC_SELECT_CONV -. "<<include>>" .-> UC_VIEW_CHANNEL
+    UC_SELECT_CONV -. "<<include>>" .-> UC_VIEW_SENTIMENT
+    UC_SELECT_CONV -. "<<include>>" .-> UC_VIEW_PRIORITY
+
+    UC_REVIEW_AI -. "<<extend>>\\n[Review Mode]" .-> UC_GEN_AI
+    UC_DECIDE_AI -. "<<include>>" .-> UC_REVIEW_AI
+
+    UC_MANUAL_RESP -. "<<extend>>" .-> UC_SEND_RESP
+    UC_DECIDE_AI -. "<<extend>>" .-> UC_SEND_RESP
+
+    UC_SEND_RESP -. "<<include>>" .-> UC_DELIVER_OUT
+    UC_DELIVER_OUT -. "<<include>>" .-> UC_RECV_RESP
+
+    UC_AUTO_DISPATCH -. "<<extend>>\\n[Auto AI Mode]" .-> UC_GEN_AI
+    UC_AUTO_DISPATCH -. "<<include>>" .-> UC_DELIVER_OUT
+
+    %% B&W UML Styling
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    classDef usecase fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    style SYS fill:#ffffff,stroke:#000000,stroke-width:2px;
+    style G_EXT fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_INBOX fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_INSPECT fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_MGMT fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_AI fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style LEFT_ACTORS fill:none,stroke:none;
+    style RIGHT_ACTORS fill:none,stroke:none;
+"""
+
+with open("c:/Users/A S U S/FYP/haqdesk_unified_inbox_use_case.mmd", "w", encoding="utf-8") as f:
+    f.write(mermaid_content)
+
+print("Saved haqdesk_unified_inbox_use_case.mmd")

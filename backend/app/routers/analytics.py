@@ -4,10 +4,11 @@ from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import require_business_analytics
+from app.core.dependencies import require_business_admin, require_business_analytics
 from app.models.user import User
 from app.repositories.analytics_repository import AnalyticsRepository
 from app.schemas.analytics import (
@@ -17,6 +18,7 @@ from app.schemas.analytics import (
     PlatformAnalyticsResponse, PlatformTrendResponse,
 )
 from app.services.analytics_service import AnalyticsService
+from app.services.faq_opportunity_service import FAQOpportunityService
 
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -99,6 +101,75 @@ def get_analytics_context(
 
 def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
     return AnalyticsService(AnalyticsRepository(db))
+
+
+class FAQDraftRequest(BaseModel):
+    title: str = Field(min_length=3, max_length=160)
+    representative_question: str = Field(min_length=8, max_length=800)
+    example_questions: list[str] = Field(default_factory=list, max_length=3)
+
+
+def _require_admin_insights(context: AnalyticsRequestContext) -> None:
+    if context.user.role != "business_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="FAQ opportunities are available to business administrators only",
+        )
+
+
+@router.get("/faq-opportunities")
+def get_faq_opportunities(
+    min_occurrences: int = Query(5, ge=2, le=50),
+    min_unique_customers: int = Query(3, ge=1, le=20),
+    include_dismissed: bool = Query(False),
+    context: AnalyticsRequestContext = Depends(get_analytics_context),
+    db: Session = Depends(get_db),
+):
+    """Admin-reviewed recurring customer questions, grouped with multilingual embeddings."""
+    _require_admin_insights(context)
+    service = FAQOpportunityService(db)
+    return service.discover(
+        business_id=context.user.business_id,
+        filters=context.filters,
+        min_occurrences=min_occurrences,
+        min_unique_customers=min_unique_customers,
+        include_dismissed=include_dismissed,
+    )
+
+
+@router.post("/faq-opportunities/{fingerprint}/dismiss")
+def dismiss_faq_opportunity(
+    fingerprint: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_business_admin),
+):
+    if not current_user.business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No business associated")
+    try:
+        return FAQOpportunityService(db).dismiss(current_user.business_id, fingerprint)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/faq-opportunities/{fingerprint}/create-knowledge-draft")
+def create_faq_knowledge_draft(
+    fingerprint: str,
+    payload: FAQDraftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_business_admin),
+):
+    if not current_user.business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No business associated")
+    try:
+        return FAQOpportunityService(db).create_knowledge_draft(
+            business_id=current_user.business_id,
+            fingerprint=fingerprint,
+            title=payload.title,
+            representative_question=payload.representative_question,
+            example_questions=payload.example_questions,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.get("/summary", response_model=AnalyticsSummaryResponse)

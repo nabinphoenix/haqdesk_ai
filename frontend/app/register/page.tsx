@@ -9,6 +9,7 @@ import FormField from "@/components/ui/FormField";
 import PasswordField from "@/components/ui/PasswordField";
 import ValidationMessage from "@/components/ui/ValidationMessage";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import ThemeLogo from "@/components/ui/ThemeLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -119,7 +120,7 @@ export default function RegisterPage() {
             className="hover-glow mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] shadow-xl transition-transform duration-500 hover:scale-105"
             style={{ background: "var(--accent)" }}
           >
-            <img src="/images/HaqDesk.png" alt="HaqDesk AI" className="h-12 w-12 object-contain" />
+            <ThemeLogo width={48} height={48} alt="HaqDesk AI" className="h-12 w-12 object-contain" />
           </div>
           <h1 className="mt-6 text-3xl font-black tracking-tighter text-[var(--text-primary)]">
             HaqDesk<span className="text-[var(--accent)]">AI</span>

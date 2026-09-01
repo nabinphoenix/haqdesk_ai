@@ -62,7 +62,8 @@ def get_or_create_user_by_email(
         business_name = f"{base_business_name} {suffix}"
         suffix += 1
 
-    business = Business(name=business_name, email=normalized_email)
+    # A brand-new Google business starts in onboarding until its admin confirms the profile.
+    business = Business(name=business_name, email=normalized_email, onboarding_completed=False)
     db.add(business)
     db.flush()
 

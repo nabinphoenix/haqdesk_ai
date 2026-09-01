@@ -28,6 +28,28 @@ logger = logging.getLogger(__name__)
 # In-memory store for OAuth codes (FYP-level approach)
 OAUTH_CODES = {}
 
+def _business_needs_onboarding(db: Session, user: User) -> bool:
+    """Return whether a newly created Google business admin must finish setup.
+
+    Invited teammates are deliberately excluded: their role is agent/supervisor
+    and their invitation already links them to an existing tenant.
+    """
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    if role != UserRole.BUSINESS_ADMIN.value or (user.provider or "").lower() != "google":
+        return False
+
+    business = db.query(Business).filter(Business.id == user.business_id).first()
+    if not business:
+        return False
+    if business.onboarding_completed is False:
+        return True
+    # Rows created before the onboarding column existed are nullable. Only
+    # Google admins with an obviously incomplete profile are prompted.
+    if business.onboarding_completed is None:
+        required = (business.name, business.email, business.website, business.phone)
+        return not all(value and str(value).strip() for value in required)
+    return False
+
 # Initialize OAuth client
 oauth = OAuth()
 
@@ -140,11 +162,20 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             user = _accept_google_invitation(
                 db, invite_token, email, name, google_id, avatar_url
             )
+            onboarding_required = False
         else:
+            # Only a newly created Google business admin receives the first-login setup gate.
+            existing_user = db.query(User).filter(User.email == email).first()
             user = get_or_create_user_by_email(db, email, name, google_id=google_id, avatar_url=avatar_url)
-        # Create temporary one-time code storing user ID
+            onboarding_required = existing_user is None and (
+                user.role.value if hasattr(user.role, "value") else str(user.role)
+            ) == UserRole.BUSINESS_ADMIN.value
+        # Create temporary one-time code storing user ID and the one-time onboarding decision.
         code = str(uuid.uuid4())
-        OAUTH_CODES[code] = user.id
+        OAUTH_CODES[code] = {
+            "user_id": user.id,
+            "onboarding_required": onboarding_required,
+        }
 
         # Build redirect URL for frontend callback using the code only
         redirect_url = f"{settings.FRONTEND_URL}/oauth/callback?code={code}"
@@ -200,7 +231,14 @@ async def oauth_exchange(request: OAuthExchangeRequest, db: Session = Depends(ge
     if code not in OAUTH_CODES:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth code")
     
-    user_id = OAUTH_CODES.pop(code)
+    code_record = OAUTH_CODES.pop(code)
+    # Accept the old integer shape for any code issued before this deployment.
+    if isinstance(code_record, dict):
+        user_id = code_record["user_id"]
+        onboarding_required = bool(code_record.get("onboarding_required"))
+    else:
+        user_id = code_record
+        onboarding_required = False
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
@@ -219,7 +257,9 @@ async def oauth_exchange(request: OAuthExchangeRequest, db: Session = Depends(ge
             "name": user.name,
             "email": user.email,
             "role": role_str,
-            "business_id": user.business_id
+            "business_id": user.business_id,
+            "needs_onboarding": _business_needs_onboarding(db, user),
+            "onboarding_required": onboarding_required
         }
     }
 
@@ -251,12 +291,13 @@ async def login_for_access_token(
             "name": user.name,
             "email": user.email,
             "role": role_str,
-            "business_id": user.business_id
+            "business_id": user.business_id,
+            "needs_onboarding": _business_needs_onboarding(db, user)
         }
     }
 
 @router.get('/me')
-async def read_current_user(current_user: User = Depends(get_current_user)):
+async def read_current_user(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     return {
         "id": current_user.id,
@@ -268,7 +309,25 @@ async def read_current_user(current_user: User = Depends(get_current_user)):
         "provider": current_user.provider,
         "avatar_url": current_user.avatar_url,
         "email_verified": current_user.email_verified,
+        "needs_onboarding": _business_needs_onboarding(db, current_user),
     }
+
+class UserUpdateRequest(BaseModel):
+    name: str | None = None
+    avatar_url: str | None = None
+
+@router.patch('/me')
+async def update_current_user(
+    payload: UserUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if payload.name is not None:
+        current_user.name = payload.name
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url
+    db.commit()
+    return {"status": "success", "message": "Profile updated"}
 
 
 @router.post('/presence')

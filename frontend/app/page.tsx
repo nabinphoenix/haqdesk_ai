@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
   Zap,
   ArrowRight,
@@ -10,100 +11,105 @@ import {
   Cpu,
   Database,
   LineChart,
-  User,
-  UserRound,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
+import InboxPreview from "@/components/marketing/InboxPreview";
+import ParticleWave from "@/components/marketing/ParticleWave";
+import { useTheme } from "next-themes";
 
+const customerLabels = ["Chats.", "Messages.", "Inquiries."] as const;
+
+function RotatingCustomerLabel() {
+  const shouldReduceMotion = useReducedMotion();
+  const [labelIndex, setLabelIndex] = useState(0);
+  const [visibleLength, setVisibleLength] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const label = customerLabels[labelIndex];
+
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      setVisibleLength(label.length);
+      setIsDeleting(false);
+      return;
+    }
+
+    const delay = isDeleting ? 45 : visibleLength === label.length ? 1500 : 85;
+    const timeoutId = window.setTimeout(() => {
+      if (!isDeleting && visibleLength < label.length) {
+        setVisibleLength((length) => length + 1);
+      } else if (!isDeleting) {
+        setIsDeleting(true);
+      } else if (visibleLength > 0) {
+        setVisibleLength((length) => length - 1);
+      } else {
+        setLabelIndex((index) => (index + 1) % customerLabels.length);
+        setIsDeleting(false);
+      }
+    }, delay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isDeleting, label.length, shouldReduceMotion, visibleLength]);
+
+  return (
+    <span className="inline-flex min-w-[10ch]" aria-label={label}>
+      <span aria-hidden="true">
+        {label.slice(0, visibleLength)}
+        {!shouldReduceMotion && (
+          <span className="ml-1 inline-block h-[0.82em] w-[3px] animate-pulse bg-[#6D4AE2] align-[-0.06em]" />
+        )}
+      </span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
 export default function Home() {
-  const mockConversations = [
-    {
-      id: 1,
-      name: "Raman Shrestha",
-      message: "Why the payment is failing?",
-      time: "2m ago",
-      gender: "male",
-      unread: true,
-    },
-    {
-      id: 2,
-      name: "Sita Thapa",
-      message: "Yo Kurta ko kati price ho?",
-      time: "15m ago",
-      gender: "female",
-      unread: false,
-    },
-    {
-      id: 3,
-      name: "Hari Maharjan",
-      message: "Thank you for fast assist!",
-      time: "1h ago",
-      gender: "male",
-      unread: false,
-    },
-  ];
-
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const footerLogoSrc = mounted && resolvedTheme === "dark"
+    ? "/images/Haqdesk_AI_Dark.png"
+    : "/images/Haqdesk_AI_Light.png";
   return (
     <div className="flex-1 overflow-y-auto font-body custom-scrollbar bg-surface dark:bg-background">
 
       {/* HERO SECTION */}
-      <section className="w-full min-h-screen flex items-center">
-        <div className="mx-auto w-full max-w-screen-xl px-[10%]">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-12 relative">
-
-            {/* Background orbs */}
-            <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2" />
-            <div className="absolute bottom-0 left-0 w-56 h-56 bg-cyan-400/8 rounded-full blur-3xl -z-10 -translate-x-1/2 translate-y-1/2" />
-
+      <section className="relative flex min-h-[max(700px,calc(100dvh-60px))] w-full items-center overflow-hidden bg-white dark:bg-background">
+        <ParticleWave />
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-24 sm:px-10 lg:px-12">
+          <div className="flex flex-col items-center justify-between gap-14 lg:flex-row lg:gap-10">
             {/* LEFT COLUMN */}
-            <div className="w-full lg:w-[55%] flex flex-col space-y-6">
-              <span className="inline-block bg-[#EDE9FE] dark:bg-accent/20 text-accent dark:text-accent-glow rounded-full px-4 py-1 text-sm font-medium self-start">
-                ✦ AI-POWERED SUPPORT
-              </span>
-              <h1
-                className="font-heading font-extrabold tracking-tight leading-[1.06] text-foreground dark:text-foreground"
-                style={{ fontSize: "clamp(38px, 4.5vw, 56px)", letterSpacing: "-0.03em" }}
-              >
-                All Your Customer Chats.
-                <span className="block">
-                  <span style={{ color: "var(--accent)" }}>One</span>
-                  {" "}Smart{" "}
-                  <span style={{ color: "var(--teal, #0f9b72)" }}>Inbox.</span>
-                </span>
+            <div className="flex w-full max-w-2xl flex-col space-y-7 lg:w-[54%]">
+
+              <h1 className="font-heading text-[clamp(2.75rem,4.1vw,4.5rem)] font-black leading-[0.94] tracking-[-0.06em] text-[#0F172A] dark:text-[#F8FAFC]">
+                <span className="block">All Your Customer</span>
+                <span className="block min-h-[0.95em]"><RotatingCustomerLabel /></span>
+                <span className="brand-gradient-text block">One Smart Inbox.</span>
               </h1>
-              <p
-                className="text-[15.5px] font-light leading-[1.75] max-w-[440px] mt-5 mb-8"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                HaqDesk AI brings together all your conversations from Instagram, WhatsApp,
-                and Messenger into a single, intelligent inbox. Respond faster with
-                AI-powered suggestions — no credit card required.
+              <p className="max-w-xl text-[15px] font-medium leading-7 text-[#64748B] dark:text-[#94A3B8] sm:text-base">
+                HaqDesk AI brings Instagram, WhatsApp, and Messenger into one intelligent inbox,
+                so your team can respond faster with thoughtful, AI-powered help.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <Link
                   href="/inbox"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-[9px] text-[14px] font-medium text-foreground transition-all duration-150 hover:-translate-y-px active:translate-y-0 shadow-lg shadow-purple-900/10"
-                  style={{ background: "var(--accent)" }}
+                  className="inline-flex min-h-[58px] items-center justify-center gap-3 rounded-[28px] bg-[#6D4AE2] px-8 py-4 font-body text-base font-bold text-white shadow-[0_14px_30px_rgba(109,74,226,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5B3BC7] hover:shadow-[0_17px_34px_rgba(109,74,226,0.34)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6D4AE2]"
                 >
                   Open Inbox
-                  <ArrowRight size={16} />
+                  <ArrowRight size={17} aria-hidden="true" />
                 </Link>
                 <Link
-                  href="/demo"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-[9px] text-[14px] font-normal transition-all duration-150 hover:bg-surface-wash dark:hover:bg-surface-wash"
-                  style={{ color: "var(--foreground)", border: "0.5px solid var(--nav-border)" }}
+                  href="#features"
+                  className="inline-flex min-h-[58px] items-center justify-center gap-3 rounded-[28px] border-2 border-[#6D4AE2] bg-white px-8 py-4 font-body text-base font-bold text-[#6D4AE2] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFF] hover:border-[#5B3BC7] hover:text-[#5B3BC7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6D4AE2] dark:border-[#9D85FF] dark:bg-[#130E22] dark:text-[#9D85FF] dark:hover:bg-[#21183b]"
                 >
-                  Watch Demo
+                  Explore features
                 </Link>
               </div>
-              <div className="flex items-center gap-5 mt-5 flex-wrap">
-                {["Free to start", "No credit card", "Setup in 2 min"].map((label) => (
-                  <span
-                    key={label}
-                    className="flex items-center gap-1.5 text-[12.5px]"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: "var(--teal)" }}>
-                      <path d="M2 6.5L5.5 10 11 3" />
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
+                {["Free to start", "No credit card", "Channels connected in up to 2 days"].map((label) => (
+                  <span key={label} className="flex items-center gap-1.5 text-xs font-semibold text-[#64748B] dark:text-[#94A3B8]">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <path d="m2.5 7.2 2.7 2.7L11.7 3.7" stroke="#6D4AE2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     {label}
                   </span>
@@ -111,157 +117,152 @@ export default function Home() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN - inbox preview card */}
-            <div className="w-full lg:w-[45%] flex justify-center lg:justify-end">
-              <div className="w-full max-w-md rounded-2xl border border-border dark:border-border bg-surface dark:bg-surface shadow-2xl overflow-hidden">
-                {/* Card header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-border">
-                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
-                    INBOX
-                  </span>
-                  <span className="text-xs font-semibold text-on-accent bg-accent rounded-full px-2 py-0.5">
-                    3 new
-                  </span>
-                </div>
-
-                {/* Conversation list */}
-                {mockConversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-border ${
-                      conv.unread ? "bg-purple-50 dark:bg-purple-900/10 border-l-2 border-l-[#6D4AE2]" : ""
-                    }`}
-                  >
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                        conv.gender === "female"
-                          ? "bg-pink-500/20 text-pink-400"
-                          : "bg-blue-500/20 text-blue-400"
-                      }`}
-                    >
-                      {conv.gender === "female" ? <UserRound size={18} /> : <User size={18} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">
-                          {conv.name}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground ml-2 shrink-0">{conv.time}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground dark:text-muted-foreground truncate mt-0.5">
-                        {conv.message}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-                {/* AI suggestion row */}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-purple-50 dark:bg-purple-900/10">
-                  <span className="text-[11px] font-semibold text-purple-500">
-                    ✦ AI Suggestion
-                  </span>
-                  <span className="text-[11px] text-muted-foreground italic truncate ml-2">
-                    Try: "Here's your tracking link..."
-                  </span>
-                </div>
-
-                {/* Response time row */}
-                <div className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 dark:border-border">
-                  <LineChart size={14} className="text-green-500" />
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-foreground dark:text-muted-foreground">
-                      Response time
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">↓ 68% faster with AI</span>
-                  </div>
-                </div>
-              </div>
+            {/* RIGHT COLUMN - sequential inbox preview */}
+            <div className="flex w-full justify-center lg:w-[42%] lg:justify-end">
+              <InboxPreview />
             </div>
 
           </div>
         </div>
       </section>
 
-      {/* STATS ROW */}
-      <section className="py-16" style={{ background: "var(--surface)" }}>
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {[
-            { value: "0.4ms", label: "Response Time", color: "text-[#06B6D4]" },
-            { value: "98.2%", label: "AI Accuracy", color: "text-accent" },
-            { value: "∞", label: "Connected Channels", color: "text-[var(--success-foreground)]" },
-            { value: "24/7", label: "Uptime", color: "text-foreground" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="border rounded-xl p-5 shadow-[0_4px_24px_rgba(109,74,226,0.04)]"
-              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-            >
-              <p className={`text-3xl font-black ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-              <p className="text-sm text-[var(--success-foreground)] mt-2">↑ Active</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* FEATURES SECTION */}
-      <section className="py-24 relative">
-        <div className="max-w-7xl mx-auto px-10">
+      <section id="features" className="relative overflow-hidden bg-[#F8FAFF] py-24 dark:bg-background">
+        <div className="pointer-events-none absolute -left-40 top-20 h-80 w-80 rounded-full bg-[#6D4AE2]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-[#2563EB]/10 blur-3xl" />
+        <div className="relative mx-auto max-w-7xl px-6 sm:px-10 lg:px-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="mx-auto mb-14 max-w-3xl text-center"
           >
-            <h2 className="text-4xl md:text-5xl font-black text-foreground dark:text-foreground tracking-tighter mb-4">
-              Everything You Need
+            <p className="mb-4 font-body text-[11px] font-bold uppercase tracking-[0.24em] text-[#6D4AE2]">Explore features</p>
+            <h2 className="font-heading text-4xl font-black leading-tight tracking-[-0.04em] text-[#0F172A] dark:text-[#F8FAFC] sm:text-5xl">
+              Everything your team needs to move faster.
             </h2>
-            <p className="text-lg max-w-2xl mx-auto font-medium" style={{ color: "var(--muted-foreground)" }}>
-              Powerful features designed to help your team deliver fast, accurate support across every channel.
+            <p className="mx-auto mt-5 max-w-2xl font-body text-base leading-7 text-[#64748B] dark:text-[#94A3B8]">
+              One calm workspace for every customer conversation, with AI that understands your business.
             </p>
           </motion.div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: MessageSquare,
-                title: "Unified Inbox",
-                description: "All messages from Instagram, WhatsApp, and Messenger flow into one unified inbox. No more switching between apps.",
-                color: "#818CF8",
-              },
-              {
-                icon: Zap,
-                title: "AI Smart Replies",
-                description: "Get instant AI-generated reply suggestions based on your knowledge base and conversation context.",
-                color: "#06B6D4",
-              },
-              {
-                icon: BookOpen,
-                title: "Knowledge Base",
-                description: "Upload your product docs, FAQs, and guides. The AI uses them to generate accurate, on-brand responses.",
-                color: "#10B981",
-              },
-            ].map((feature, i) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.15 }}
-                className="p-10 rounded-[2.5rem] bg-surface-wash border hover:border-accent-glow/20 transition-all group hover:bg-surface/[0.08]"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-8 border bg-surface-wash group-hover:bg-accent group-hover:text-on-accent transition-all"
-                  style={{ color: feature.color, borderColor: "var(--border)" }}
-                >
-                  <feature.icon size={28} strokeWidth={2} />
+
+          <div className="grid gap-5 lg:grid-cols-12">
+            <motion.article
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4 }}
+              className="group relative min-h-[350px] overflow-hidden rounded-[2rem] bg-[#6D4AE2] p-7 text-white shadow-[0_18px_50px_rgba(109,74,226,0.22)] sm:p-9 lg:col-span-7"
+            >
+              <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full border-[26px] border-white/10 transition-transform duration-500 group-hover:scale-110" />
+              <div className="relative flex h-full flex-col justify-between">
+                <div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-white">
+                    <MessageSquare size={27} strokeWidth={1.8} />
+                  </div>
+                  <p className="mt-8 font-body text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">One workspace</p>
+                  <h3 className="mt-2 font-heading text-3xl font-black tracking-[-0.04em]">Unified Inbox</h3>
+                  <p className="mt-4 max-w-xl font-body text-sm leading-6 text-white/85">
+                    All messages from Instagram, WhatsApp, and Messenger flow into one unified inbox. No more switching between apps.
+                  </p>
                 </div>
-                <h3 className="text-xl font-black text-foreground dark:text-foreground tracking-tight mb-3">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed font-medium">{feature.description}</p>
-              </motion.div>
-            ))}
+                <div className="mt-8 flex flex-wrap gap-2 font-body text-[11px] font-semibold text-white/90">
+                  {["Instagram", "WhatsApp", "Messenger"].map((channel) => (
+                    <span key={channel} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">{channel}</span>
+                  ))}
+                </div>
+              </div>
+            </motion.article>
+
+            <motion.article
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.08, duration: 0.4 }}
+              className="group relative min-h-[350px] overflow-hidden rounded-[2rem] border border-[#BFDBFE] bg-white p-7 text-[#0F172A] shadow-[0_18px_50px_rgba(37,99,235,0.10)] sm:p-9 lg:col-span-5 dark:border-white/10 dark:bg-[#130E22] dark:text-[#F8FAFC]"
+            >
+              <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#2563EB]/10 transition-transform duration-500 group-hover:scale-125" />
+              <div className="relative flex h-full flex-col justify-between">
+                <div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#DBEAFE] text-[#2563EB] dark:bg-[#2563EB]/20 dark:text-[#93C5FD]">
+                    <Zap size={27} strokeWidth={2} />
+                  </div>
+                  <p className="mt-8 font-body text-[10px] font-bold uppercase tracking-[0.2em] text-[#2563EB]">Context-aware assistance</p>
+                  <h3 className="mt-2 font-heading text-3xl font-black tracking-[-0.04em]">AI Smart Replies</h3>
+                  <p className="mt-4 font-body text-sm leading-6 text-[#64748B] dark:text-[#94A3B8]">
+                    Get instant AI-generated reply suggestions based on your knowledge base and conversation context.
+                  </p>
+                </div>
+                <div className="mt-8 flex items-center gap-3 rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3 font-body text-xs font-semibold text-[#334155] dark:border-white/10 dark:bg-white/5 dark:text-[#CBD5E1]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#6D4AE2] shadow-[0_0_0_5px_rgba(109,74,226,0.12)]" />
+                  Suggested reply ready to review
+                  <span className="ml-auto text-[#6D4AE2]">AI</span>
+                </div>
+              </div>
+            </motion.article>
+
+            <motion.article
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.16, duration: 0.4 }}
+              className="group relative min-h-[310px] overflow-hidden rounded-[2rem] border border-[#C7D2FE] bg-[#EEF2FF] p-7 text-[#0F172A] shadow-[0_18px_50px_rgba(79,70,229,0.10)] sm:p-9 lg:col-span-5 dark:border-white/10 dark:bg-[#1A1630] dark:text-[#F8FAFC]"
+            >
+              <div className="pointer-events-none absolute -bottom-12 -right-10 h-44 w-44 rounded-full bg-[#9D85FF]/20 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+              <div className="relative flex h-full flex-col justify-between">
+                <div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/70 text-[#4F46E5] dark:bg-white/10 dark:text-[#A5B4FC]">
+                    <BookOpen size={27} strokeWidth={1.8} />
+                  </div>
+                  <p className="mt-8 font-body text-[10px] font-bold uppercase tracking-[0.2em] text-[#4F46E5] dark:text-[#A5B4FC]">Your source of truth</p>
+                  <h3 className="mt-2 font-heading text-3xl font-black tracking-[-0.04em]">Knowledge Base</h3>
+                  <p className="mt-4 font-body text-sm leading-6 text-[#475569] dark:text-[#CBD5E1]">
+                    Upload your product docs, FAQs, and guides. The AI uses them to generate accurate, on-brand responses.
+                  </p>
+                </div>
+                <div className="mt-7 flex flex-wrap gap-2 font-body text-[11px] font-semibold text-[#4F46E5] dark:text-[#C7D2FE]">
+                  {["Product docs", "FAQs", "Guides"].map((item) => (
+                    <span key={item} className="rounded-xl border border-[#C7D2FE] bg-white/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">{item}</span>
+                  ))}
+                </div>
+              </div>
+            </motion.article>
+
+            <motion.article
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.24, duration: 0.4 }}
+              className="group relative min-h-[310px] overflow-hidden rounded-[2rem] bg-[#2563EB] p-7 text-white shadow-[0_18px_50px_rgba(37,99,235,0.22)] sm:p-9 lg:col-span-7"
+            >
+              <div className="pointer-events-none absolute -bottom-24 -right-14 h-72 w-72 rounded-full border-[30px] border-white/10 transition-transform duration-500 group-hover:scale-110" />
+              <div className="relative grid h-full gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+                <div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-white">
+                    <Users size={27} strokeWidth={1.8} />
+                  </div>
+                  <p className="mt-8 font-body text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">Secure collaboration</p>
+                  <h3 className="mt-2 font-heading text-3xl font-black tracking-[-0.04em]">Invite Team</h3>
+                </div>
+                <div>
+                  <p className="max-w-xl font-body text-sm leading-6 text-white/85">
+                    Invite teammates with role-based access. They use their own HaqDesk login, so you never share social media credentials.
+                  </p>
+                  <div className="mt-7 flex items-center justify-between rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-sm">
+                    <div className="flex -space-x-2">
+                      {["#9D85FF", "#C7D2FE", "#FFFFFF"].map((color, index) => (
+                        <span key={color} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#2563EB] text-[10px] font-bold text-[#2563EB]" style={{ backgroundColor: color }}>{index === 2 ? "+" : ""}</span>
+                      ))}
+                    </div>
+                    <span className="flex items-center gap-2 font-body text-[11px] font-semibold text-white/90"><ShieldCheck size={15} /> Credentials stay private</span>
+                  </div>
+                </div>
+              </div>
+            </motion.article>
           </div>
         </div>
       </section>
@@ -296,75 +297,67 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA SECTION */}
-      <section className="relative pb-24 pt-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-col sm:flex-row gap-4 w-full justify-center px-6"
-        >
-          <Link
-            href="/inbox"
-            className="w-full sm:w-auto bg-accent hover:bg-accent-hover text-on-accent px-12 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 active:scale-95 shadow-xl shadow-lg group"
-          >
-            Open Inbox
-            <ArrowRight size={20} strokeWidth={3} className="group-hover:translate-x-2 transition-transform" />
-          </Link>
-          <Link
-            href="/demo"
-            className="w-full sm:w-auto bg-surface-wash border-2 border-border text-foreground dark:text-foreground hover:bg-surface-wash px-12 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.3em] transition-all active:scale-95 flex items-center justify-center"
-          >
-            Watch Demo
-          </Link>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="hidden lg:flex justify-center gap-16 pt-16 border-t mt-16"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center gap-4 group">
-            <Database size={18} className="text-accent-glow opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-muted-foreground transition-colors">
-              AI Powered
-            </span>
-          </div>
-          <div className="flex items-center gap-4 group">
-            <LineChart size={18} className="text-[#06B6D4] opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-muted-foreground transition-colors">
-              Live Analytics
-            </span>
-          </div>
-          <div className="flex items-center gap-4 group">
-            <Cpu size={18} className="text-accent-glow opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-muted-foreground transition-colors">
-              Smart Automation
-            </span>
-          </div>
-        </motion.div>
-      </section>
-
       {/* FOOTER */}
-      <footer className="py-10 border-t bg-surface/[0.01]" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-7xl mx-auto px-10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
-            >
+      <footer className="border-t border-[#E2E8F0] bg-white py-0 dark:border-white/10 dark:bg-background">
+        <div className="mx-auto max-w-7xl px-6 py-12 sm:px-10 lg:px-12">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center gap-8 border-b border-[#E2E8F0] pb-10 dark:border-white/10"
+          >
+            <div className="flex w-full flex-col items-stretch justify-center gap-4 sm:w-auto sm:flex-row">
+              <Link
+                href="/inbox"
+                className="inline-flex min-h-[58px] items-center justify-center gap-3 rounded-[28px] bg-[#6D4AE2] px-8 py-4 font-body text-base font-bold text-white shadow-[0_14px_30px_rgba(109,74,226,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5B3BC7] hover:shadow-[0_17px_34px_rgba(109,74,226,0.34)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6D4AE2]"
+              >
+                Open Inbox
+                <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+              <Link
+                href="#features"
+                className="inline-flex min-h-[58px] items-center justify-center gap-3 rounded-[28px] border-2 border-[#6D4AE2] bg-white px-8 py-4 font-body text-base font-bold text-[#6D4AE2] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFF] hover:border-[#5B3BC7] hover:text-[#5B3BC7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6D4AE2] dark:border-[#9D85FF] dark:bg-[#130E22] dark:text-[#9D85FF] dark:hover:bg-[#21183b]"
+              >
+                Explore Features
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+              <div className="flex items-center gap-3 font-body text-xs font-bold uppercase tracking-[0.18em] text-[#64748B] dark:text-[#94A3B8]">
+                <Database size={17} className="text-[#6D4AE2]" aria-hidden="true" />
+                AI Powered
+              </div>
+              <div className="flex items-center gap-3 font-body text-xs font-bold uppercase tracking-[0.18em] text-[#64748B] dark:text-[#94A3B8]">
+                <LineChart size={17} className="text-[#2563EB]" aria-hidden="true" />
+                Live Analytics
+              </div>
+              <div className="flex items-center gap-3 font-body text-xs font-bold uppercase tracking-[0.18em] text-[#64748B] dark:text-[#94A3B8]">
+                <Cpu size={17} className="text-[#4F46E5]" aria-hidden="true" />
+                Smart Automation
+              </div>
+            </div>
+          </motion.div>
+        </div>
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 px-6 py-8 sm:px-10 md:flex-row lg:px-12">
+          <Link href="/" className="group flex items-center gap-3" aria-label="HaqDesk AI home">
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg transition-transform duration-200 group-hover:scale-105">
               <img
-                src="/images/HaqDesk.png"
-                alt="HaqDesk AI"
-                className="w-full h-full object-contain"
+                src={footerLogoSrc}
+                alt=""
+                className="h-full w-full object-contain"
               />
             </div>
-            <span className="text-sm font-bold tracking-tight text-foreground font-heading">
-              HaqDesk<span style={{ color: "var(--accent)" }}> AI</span>
-            </span>
-          </div>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-            © {new Date().getFullYear()} HaqDesk AI. All rights reserved.
+            <div className="leading-tight">
+              <span className="font-heading text-sm font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
+                HaqDesk<span className="text-[#6D4AE2]"> AI</span>
+              </span>
+              <p className="mt-0.5 text-[10px] font-medium text-[#64748B] dark:text-[#94A3B8]">
+                AI-powered customer support
+              </p>
+            </div>
+          </Link>
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-[#64748B] dark:text-[#94A3B8]">
+            Copyright 2026 HaqDesk AI. All rights reserved.
           </p>
         </div>
       </footer>

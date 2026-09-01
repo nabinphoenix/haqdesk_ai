@@ -14,6 +14,7 @@ from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.integration import Integration
 from app.models.message import Message
+from app.models.knowledge import AgentReplyFeedback
 from app.services.rag_service import rag_service
 from app.services.reply_formatter import (
     email_html,
@@ -23,6 +24,7 @@ from app.services.reply_formatter import (
 )
 from app.services.credential_service import decrypt_secret
 from app.services.sentiment_service import detect_sentiment
+from app.services.knowledge_feedback import index_approved_feedback
 
 logger = logging.getLogger("uvicorn")
 
@@ -73,13 +75,11 @@ async def process_incoming_message_in_background(
     """
     db = SessionLocal()
     try:
-        # 1. Detect language
-        language = rag_service.detect_language(message_text)
-        
-        # 2. Detect sentiment
+        # 1. Detect sentiment. Language analysis is part of the RAG pipeline,
+        # which also translates the query before retrieving knowledge.
         sentiment = detect_sentiment(message_text)
         
-        # 3. Fetch business AI response mode (auto vs review)
+        # 2. Fetch business AI response mode (auto vs review)
         business = db.query(Business).filter(Business.id == business_id).first()
         mode = (business.ai_response_mode if business and business.ai_response_mode else "review").lower()
         msg = db.query(Message).filter(Message.id == message_id).first()
@@ -93,7 +93,7 @@ async def process_incoming_message_in_background(
         )
         customer_name = usable_customer_name(customer.display_name if customer else None)
 
-        # 4. Query RAG with conversation memory history context and business mode
+        # 3. Query RAG with conversation memory history context and business mode
         rag_result = await rag_service.query(
             question=message_text,
             business_id=business_id,
@@ -101,7 +101,6 @@ async def process_incoming_message_in_background(
             current_message_id=message_id,
             mode=mode,
             db=db,
-            language=language,
             sentiment=sentiment,
             platform=platform,
             customer_name=customer_name,
@@ -109,14 +108,23 @@ async def process_incoming_message_in_background(
         
         draft = None
         metadata = None
+        language = "english"
         if rag_result and rag_result.get("answer"):
             draft = ensure_signature(
                 rag_result["answer"],
                 business.name if business else "Customer",
             )
-            metadata = rag_result.get("metadata")
+            metadata = dict(rag_result.get("metadata") or {})
+            metadata.update({
+                "confidence": rag_result.get("confidence", 0.0),
+                "grounded": rag_result.get("grounded", False),
+                "sources": rag_result.get("sources", []),
+                "source_details": rag_result.get("source_details", []),
+                "chunks_used": rag_result.get("chunks_used", 0),
+            })
+            language = rag_result.get("language_detected") or language
 
-        # 5. Update the original customer message in the database with the metadata
+        # 4. Update the original customer message in the database with the metadata
         if msg:
             msg.ai_draft = draft
             msg.ai_language = language
@@ -136,6 +144,7 @@ async def process_incoming_message_in_background(
                     business_id,
                     draft,
                     reply_subject=reply_subject,
+                    ai_metadata=metadata,
                 )
                 # Clear the draft only after delivery succeeds; on failure it
                 # remains available for an agent to review/retry.
@@ -155,7 +164,8 @@ async def process_incoming_message_in_background(
                     conversation_id=conversation_id,
                     sender_type="ai",
                     content=draft,
-                    platform=msg.platform if msg else "messenger"
+                    platform=msg.platform if msg else "messenger",
+                    ai_metadata=metadata,
                 )
                 db.add(ai_msg)
                 db.commit()
@@ -173,6 +183,7 @@ async def dispatch_auto_ai_reply(
     business_id: int,
     reply_text: str,
     reply_subject: str = None,
+    ai_metadata: dict | None = None,
 ):
     """Internal helper to dispatch AI reply automatically when in auto mode."""
     try:
@@ -295,10 +306,12 @@ async def dispatch_auto_ai_reply(
         # Record the sent bubble only after the channel confirms acceptance.
         auto_msg = Message(
             conversation_id=conversation_id,
-            sender_type="agent",
+            # This was generated and delivered without a human sender. Store it
+            # explicitly as AI so it is not attributed to whoever is viewing it.
+            sender_type="ai",
             content=reply_text,
             platform=customer.platform,
-            ai_metadata={"response_mode": "auto"},
+            ai_metadata={"response_mode": "auto", **(ai_metadata or {})},
         )
         conv.last_read_at = datetime.now(timezone.utc)
         db.add(auto_msg)

@@ -18,7 +18,9 @@ interface KnowledgeDoc {
   filename: string;
   file_type: string;
   file_size: number;
-  status: "processing" | "ready" | "failed";
+  status: "processing" | "ready" | "failed" | "draft";
+  source_type?: string;
+  processing_error?: string | null;
   chunks: number;
   created_at: string;
 }
@@ -28,6 +30,8 @@ interface QueryResult {
   confidence: number;
   sources: string[];
   chunks_used: number;
+  grounded?: boolean;
+  source_details?: Array<{ filename: string; page_number?: number | null; similarity?: number }>;
 }
 
 export default function KnowledgeBase() {
@@ -41,6 +45,8 @@ export default function KnowledgeBase() {
   const [queryText, setQueryText] = useState("");
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
+  const [isTestingAI, setIsTestingAI] = useState(false);
+  const [knowledgeConfig, setKnowledgeConfig] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDeleteDocId, setConfirmDeleteDocId] = useState<number | null>(null);
   const [isDeletingDoc, setIsDeletingDoc] = useState(false);
@@ -107,6 +113,10 @@ export default function KnowledgeBase() {
   useEffect(() => {
     setUserRole(localStorage.getItem("userRole"));
     fetchDocuments();
+    fetchWithAuth("/api/v1/knowledge/config")
+      .then(res => res.json())
+      .then(data => setKnowledgeConfig(data))
+      .catch(console.error);
     const interval = setInterval(fetchDocuments, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -197,6 +207,8 @@ export default function KnowledgeBase() {
     if (!queryText.trim()) return;
     setQueryLoading(true);
     setQueryResult(null);
+    setIsTestingAI(true);
+    setSelectedDoc(null);
     try {
       const response = await fetchWithAuth(`/api/v1/knowledge/query`, {
         method: "POST",
@@ -369,6 +381,7 @@ export default function KnowledgeBase() {
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                     doc.status === "processing" ? "bg-accent/20 text-accent-glow" :
                     doc.status === "failed" ? "bg-[var(--error-surface)] text-[var(--error-foreground)]" :
+                    doc.status === "draft" ? "bg-[var(--warning-surface)] text-[var(--warning)]" :
                     "bg-[var(--success-surface)] text-[var(--success-foreground)]"
                   }`}>
                     <FileText size={18} strokeWidth={2} />
@@ -385,6 +398,7 @@ export default function KnowledgeBase() {
                     {doc.status === "processing" && <div className="w-3 h-3 border-2 border-accent-glow border-t-transparent rounded-full animate-spin" />}
                     {doc.status === "ready" && <CheckCircle2 size={14} className="text-[var(--success-foreground)]" />}
                     {doc.status === "failed" && <div className="w-3 h-3 rounded-full bg-[var(--error)]" />}
+                    {doc.status === "draft" && <Edit3 size={14} className="text-[var(--warning)]" />}
                     {isAdmin && (
                       <button
                         onClick={(e) => handleDelete(doc.id, e)}
@@ -436,7 +450,7 @@ export default function KnowledgeBase() {
 
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     {[
-                      { label: "Status", value: selectedDoc.status, color: selectedDoc.status === "ready" ? "text-[var(--success-foreground)]" : "text-accent-glow" },
+                      { label: "Status", value: selectedDoc.status, color: selectedDoc.status === "ready" ? "text-[var(--success-foreground)]" : selectedDoc.status === "draft" ? "text-[var(--warning)]" : "text-accent-glow" },
                       { label: "Chunks", value: selectedDoc.chunks?.toString() || "—", color: "text-foreground" },
                       { label: "File type", value: selectedDoc.file_type?.toUpperCase() || "—", color: "text-foreground" },
                     ].map((s) => (
@@ -452,9 +466,15 @@ export default function KnowledgeBase() {
                     <p className="text-sm font-bold text-foreground">{formatFileSize(selectedDoc.file_size)}</p>
                   </div>
 
+                  {selectedDoc.status === "failed" && selectedDoc.processing_error && (
+                    <div className="p-4 rounded-xl bg-[var(--error-surface)] border border-[var(--error-border)] mb-5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--error-foreground)] mb-1">Indexing failed</p>
+                      <p className="text-xs font-medium text-[var(--error-foreground)] break-words">{selectedDoc.processing_error}</p>
+                    </div>
+                  )}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => { setQueryText(""); setSelectedDoc(null); }}
+                      onClick={() => { setQueryText(""); setSelectedDoc(null); setQueryResult(null); setIsTestingAI(true); }}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent-glow text-[11px] font-black uppercase tracking-wider transition-all"
                     >
                       <Bot size={13} />
@@ -487,14 +507,22 @@ export default function KnowledgeBase() {
                   className="rounded-[2rem] border border-surface-border bg-surface-wash p-7"
                 >
                   <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-foreground">AI Response</h3>
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-foreground">AI Response</h3>
+                      {knowledgeConfig && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          LLM: <span className="font-bold text-accent-glow">{knowledgeConfig.llm_model}</span> |
+                          Embedding: <span className="font-bold">{knowledgeConfig.embedding_model}</span>
+                        </p>
+                      )}
+                    </div>
                     <button onClick={() => setQueryResult(null)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
                       <X size={15} />
                     </button>
                   </div>
                   <div className="flex items-center gap-3 mb-5">
                     <span className="text-[10px] font-black px-2.5 py-1 bg-[var(--success-surface)] border border-[var(--success-border)] text-[var(--success-foreground)] rounded-lg uppercase tracking-wider">
-                      Confidence: {Math.round(queryResult.confidence * 100)}%
+                      {queryResult.grounded ? "Grounded: " + Math.round(queryResult.confidence * 100) + "%" : "Needs review — no matching source"}
                     </span>
                     <span className="text-[10px] font-black px-2.5 py-1 bg-accent/10 border border-accent-glow/20 text-accent-glow rounded-lg uppercase tracking-wider">
                       {queryResult.chunks_used} chunks matched
@@ -516,6 +544,49 @@ export default function KnowledgeBase() {
                       </div>
                     </div>
                   )}
+                </motion.div>
+              ) : isTestingAI ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-[2rem] border border-surface-border bg-surface-wash p-7 h-full flex flex-col relative"
+                >
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Test AI</h3>
+                      {knowledgeConfig && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          LLM: <span className="font-bold text-accent-glow">{knowledgeConfig.llm_model}</span> |
+                          Embedding: <span className="font-bold">{knowledgeConfig.embedding_model} ({knowledgeConfig.embedding_dim} dim)</span>
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => { setIsTestingAI(false); setQueryResult(null); setQueryText(""); }} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center items-center text-muted-foreground opacity-50 mb-6">
+                    <Bot size={48} className="mb-4 text-accent-glow" />
+                    <p className="text-xs uppercase tracking-widest font-black text-center">Ready to test</p>
+                  </div>
+
+                  {/* Dedicated Chat Input for Test AI */}
+                  <form onSubmit={handleQuerySubmit} className="relative mt-auto">
+                    <input
+                      type="text"
+                      value={queryText}
+                      onChange={(e) => setQueryText(e.target.value)}
+                      placeholder="Type a message to simulate a customer..."
+                      className="w-full bg-surface border border-surface-border pl-4 pr-24 py-4 rounded-2xl text-sm font-medium text-foreground placeholder-slate-500 outline-none transition-all focus:border-accent-glow/40 focus:bg-surface-wash"
+                    />
+                    <button
+                      type="submit"
+                      disabled={queryLoading || !queryText.trim()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent rounded-xl text-[11px] font-black uppercase tracking-wider disabled:opacity-40 transition-all flex items-center gap-1.5"
+                    >
+                      {queryLoading ? <div className="w-3 h-3 border-2 border-on-accent border-t-transparent rounded-full animate-spin" /> : "Send"}
+                    </button>
+                  </form>
                 </motion.div>
               ) : (
                 <div className="h-full min-h-[300px] rounded-[2rem] border border-dashed border-surface-border flex flex-col items-center justify-center gap-4 text-muted-foreground">

@@ -12,7 +12,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.integration import Integration
 from app.models.customer_identity import CustomerIdentity
-from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
+from app.models.knowledge import KnowledgeDocument, KnowledgeChunk, KnowledgeIngestionJob, AgentReplyFeedback
 from app.models.invitation import Invitation
 
 
@@ -74,6 +74,26 @@ def migrate():
                 else:
                     print(f"  [ERROR] Error adding '{col_name}': {e}")
 
+        # Add knowledge processing metadata safely
+        knowledge_columns_to_add = [
+            ('source_type', 'VARCHAR'),
+            ('file_size', 'INTEGER DEFAULT 0'),
+            ('checksum', 'VARCHAR(64)'),
+            ('processing_error', 'TEXT'),
+            ('processing_started_at', 'TIMESTAMP'),
+            ('processed_at', 'TIMESTAMP'),
+            ('ingestion_attempts', 'INTEGER DEFAULT 0'),
+        ]
+        for col_name, col_type in knowledge_columns_to_add:
+            try:
+                conn.execute(text(f'ALTER TABLE knowledge_documents ADD COLUMN {col_name} {col_type}'))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if 'already exists' not in str(e).lower() and 'duplicate column' not in str(e).lower():
+                    print(f'Error adding knowledge column {col_name}: {e}')
+        conn.execute(text('UPDATE knowledge_documents SET source_type = ' + chr(39) + 'upload' + chr(39) + ' WHERE source_type IS NULL'))
+        conn.commit()
         # Add new columns to messages table safely
         messages_columns_to_add = [
             ("ai_draft", "TEXT"),
@@ -155,6 +175,11 @@ def migrate():
     # Step 2: Create all new tables (knowledge_documents, knowledge_chunks, etc.)
     print("Creating new tables...")
     Base.metadata.create_all(bind=engine)
+    # Recover documents left in processing by earlier non-durable ingestion.
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO knowledge_ingestion_jobs (document_id, business_id, status, attempts, available_at, created_at) SELECT d.id, d.business_id, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM knowledge_documents d WHERE d.status = 'processing' AND d.storage_path IS NOT NULL AND NOT EXISTS (SELECT 1 FROM knowledge_ingestion_jobs j WHERE j.document_id = d.id)"))
+        conn.execute(text("UPDATE knowledge_documents SET status = 'failed', processing_error = 'No stored file is available for ingestion.' WHERE status = 'processing' AND storage_path IS NULL"))
+
     
     # Create indexes safely
     with engine.connect() as conn:

@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 
-const PUBLIC_PAGES = ["/login", "/register", "/accept-invite", "/forgot-password", "/reset-password"];
+const PUBLIC_PAGES = ["/login", "/register", "/accept-invite", "/forgot-password", "/reset-password", "/onboarding/business"];
 
 export default function MainWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

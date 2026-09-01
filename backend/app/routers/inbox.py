@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File, Form, Request, BackgroundTasks
 import os
 import httpx
 import uuid
@@ -16,6 +16,8 @@ from app.models.user import User
 from app.services.messaging_service import MessagingService
 from app.models.integration import Integration
 from app.models.business import Business
+from app.models.knowledge import AgentReplyFeedback
+from app.services.knowledge_feedback import index_approved_feedback
 from app.core.config import settings
 
 
@@ -23,6 +25,17 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 messaging_service = MessagingService()
 
 from app.core.dependencies import get_current_user, require_business_admin
+
+def _effective_sender_type(message: Message) -> str:
+    """Expose legacy automatic replies as AI without changing past records."""
+    metadata = message.ai_metadata if isinstance(message.ai_metadata, dict) else {}
+    if (
+        (message.sender_type or "").lower() == "agent"
+        and message.sender_id is None
+        and metadata.get("response_mode") == "auto"
+    ):
+        return "ai"
+    return message.sender_type
 
 @router.get("/conversations")
 async def get_conversations(
@@ -76,6 +89,7 @@ async def get_conversations(
                 Message.sender_type == "customer"
             ).count()
         
+        last_sender_type = _effective_sender_type(last_message) if last_message else None
         sort_time = last_message.timestamp if last_message else conv.created_at
 
         result.append({
@@ -84,7 +98,7 @@ async def get_conversations(
             "customer_email": master_customer.platform_user_id if master_customer and master_customer.platform == "email" else None,
             "customer_id": master_customer.id if master_customer else None,
             "last_message": last_message.content if last_message else "",
-            "last_message_sender_type": last_message.sender_type if last_message else None,
+            "last_message_sender_type": last_sender_type,
             "time": sort_time,
             "status": conv.status,
             "priority": conv.priority,
@@ -139,18 +153,19 @@ async def get_messages(
 
     result = []
     for msg in messages:
+        sender_type = _effective_sender_type(msg)
         sender_name = None
-        if msg.sender_type == "agent" and msg.sender_id:
+        if sender_type == "agent" and msg.sender_id:
             agent = db.query(User).filter(User.id == msg.sender_id).first()
             if agent:
                 sender_name = agent.name
-        elif msg.sender_type == "ai":
+        elif sender_type == "ai":
             sender_name = "AI Assistant"
 
         result.append({
             "id": msg.id,
             "conversation_id": msg.conversation_id,
-            "sender_type": msg.sender_type,
+            "sender_type": sender_type,
             "sender_id": msg.sender_id,
             "sender_name": sender_name,
             "content": msg.content,
@@ -174,6 +189,7 @@ class ReplyRequest(BaseModel):
 async def reply_to_conversation(
     conversation_id: int,
     request: ReplyRequest,
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -335,6 +351,35 @@ async def reply_to_conversation(
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
+    # An accepted/edited AI suggestion is explicit human feedback. Persist it
+    # and index it asynchronously as a searchable example for this business.
+    if request.ai_assisted and content.strip():
+        source_message = db.query(Message).filter(
+            Message.conversation_id == conversation_id,
+            Message.sender_type == 'customer',
+        ).order_by(Message.timestamp.desc(), Message.id.desc()).first()
+        if source_message and source_message.content:
+            feedback = AgentReplyFeedback(
+                business_id=conv.business_id,
+                conversation_id=conversation_id,
+                agent_id=agent_id,
+                question=source_message.content,
+                ai_draft=source_message.ai_draft,
+                approved_answer=content,
+            )
+            db.add(feedback)
+            db.commit()
+            db.refresh(feedback)
+            new_message.ai_metadata = {
+                **(new_message.ai_metadata or {}),
+                'feedback_id': feedback.id,
+                'feedback_status': 'queued',
+            }
+            db.commit()
+            if background_tasks is not None:
+                background_tasks.add_task(index_approved_feedback, feedback.id)
+            else:
+                index_approved_feedback(feedback.id)
 
     # If it failed to send but we saved to DB, we can return the message but with a warning 
     # Or just return the message and let the user see it in the UI.

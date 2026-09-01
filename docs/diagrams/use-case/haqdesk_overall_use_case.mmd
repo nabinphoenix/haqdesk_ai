@@ -1,0 +1,118 @@
+flowchart LR
+    %% HaqDesk AI - Overall Use Case Diagram (UML 2.5)
+
+    %% Actors
+    subgraph LEFT_ACTORS [ ]
+        direction TB
+        ADMIN["👤 Business Admin\n<<primary actor>>"]
+        STAFF["👤 Support Staff\n<<primary actor>>"]
+    end
+
+    subgraph RIGHT_ACTORS [ ]
+        direction TB
+        CUST["👤 Customer / End User\n<<external actor>>"]
+        COMM["🖥️ Communication Platform\n(Meta, Gmail, WhatsApp)"]
+    end
+
+    %% Actor Generalization
+    ADMIN -- "|generalizes|" --> STAFF
+
+    %% System Boundary
+    subgraph SYS ["HaqDesk AI"]
+        direction TB
+
+        %% Package 1: Administration & Setup
+        subgraph G_ADMIN ["Business Administration & Setup"]
+            UC_REGISTER(["Register Business Account"]):::usecase
+            UC_LOGIN(["Log In / Authenticate"]):::usecase
+            UC_PROFILE_SETTINGS(["Manage Business Profile & Settings"]):::usecase
+            UC_STAFF(["Manage Staff"]):::usecase
+            UC_INTEG(["Configure Communication Integrations"]):::usecase
+            UC_KB(["Manage Knowledge Base"]):::usecase
+        end
+
+        %% Package 2: Customer Support & Unified Inbox
+        subgraph G_SUPPORT ["Customer Support & Unified Inbox"]
+            UC_INBOX(["Access Unified Inbox"]):::usecase
+            UC_CONV(["Manage Customer Conversations"]):::usecase
+            UC_MANUAL_RESP(["Write Manual Response"]):::usecase
+            UC_SEND_RESP(["Send Customer Response"]):::usecase
+        end
+
+        %% Package 3: AI Intelligence Engine
+        subgraph G_AI ["AI Intelligence & Human-in-the-Loop"]
+            UC_GEN_AI(["Generate AI-Assisted Response"]):::usecase
+            UC_RETRIEVE_KB(["Retrieve Business Knowledge"]):::usecase
+            UC_REVIEW_AI(["Review AI Draft"]):::usecase
+            UC_DECIDE_AI(["Accept / Edit / Reject AI Draft"]):::usecase
+        end
+
+        %% Package 4: Collaboration & Business Insights
+        subgraph G_INSIGHTS ["Collaboration & Business Intelligence"]
+            UC_INTERNAL_CHAT(["Use Internal Team Chat"]):::usecase
+            UC_VIEW_ANALYTICS(["View Analytics"]):::usecase
+            UC_EXPORT_ANALYTICS(["Export Analytics Report"]):::usecase
+        end
+
+        %% Package 5: Channel Ingestion & Dispatch
+        subgraph G_CHANNELS ["Channel Ingestion & Dispatch"]
+            UC_DELIVER_IN(["Deliver Incoming Customer Message"]):::usecase
+            UC_DELIVER_OUT(["Deliver Outgoing Business Response"]):::usecase
+        end
+    end
+
+    %% External Customer Use Cases
+    UC_SEND_MSG(["Send Message to Business"]):::usecase
+    UC_RECV_RESP(["Receive Business Response"]):::usecase
+
+    %% Business Admin Associations
+    ADMIN --- UC_REGISTER
+    ADMIN --- UC_LOGIN
+    ADMIN --- UC_PROFILE_SETTINGS
+    ADMIN --- UC_STAFF
+    ADMIN --- UC_INTEG
+    ADMIN --- UC_KB
+
+    %% Support Staff Associations (Inherited by Business Admin)
+    STAFF --- UC_LOGIN
+    STAFF --- UC_INBOX
+    STAFF --- UC_CONV
+    STAFF --- UC_MANUAL_RESP
+    STAFF --- UC_SEND_RESP
+    STAFF --- UC_REVIEW_AI
+    STAFF --- UC_DECIDE_AI
+    STAFF --- UC_INTERNAL_CHAT
+    STAFF --- UC_VIEW_ANALYTICS
+
+    %% External Associations
+    CUST --- UC_SEND_MSG
+    CUST --- UC_RECV_RESP
+    COMM --- UC_DELIVER_IN
+    COMM --- UC_DELIVER_OUT
+
+    %% UML Include & Extend Relationships
+    UC_SEND_MSG -. "<<include>>" .-> UC_DELIVER_IN
+    UC_DELIVER_IN -. "<<include>>" .-> UC_GEN_AI
+    UC_DELIVER_IN -. "<<include>>" .-> UC_CONV
+
+    UC_GEN_AI -. "<<include>>" .-> UC_RETRIEVE_KB
+    UC_REVIEW_AI -. "<<extend>>\n[Review Mode]" .-> UC_GEN_AI
+    UC_DECIDE_AI -. "<<include>>" .-> UC_REVIEW_AI
+
+    UC_MANUAL_RESP -. "<<extend>>" .-> UC_SEND_RESP
+    UC_SEND_RESP -. "<<include>>" .-> UC_DELIVER_OUT
+    UC_DELIVER_OUT -. "<<include>>" .-> UC_RECV_RESP
+
+    UC_EXPORT_ANALYTICS -. "<<extend>>" .-> UC_VIEW_ANALYTICS
+
+    %% Styling for Academic B&W Cleanliness
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    classDef usecase fill:#ffffff,stroke:#000000,stroke-width:1.8px,color:#000000;
+    style SYS fill:#ffffff,stroke:#000000,stroke-width:2.2px;
+    style G_ADMIN fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_SUPPORT fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_AI fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_INSIGHTS fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_CHANNELS fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style LEFT_ACTORS fill:none,stroke:none;
+    style RIGHT_ACTORS fill:none,stroke:none;

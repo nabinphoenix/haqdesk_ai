@@ -111,11 +111,11 @@ def test_auto_send_without_integration_retains_draft_for_retry(monkeypatch):
     async def generated_reply(**_kwargs):
         return {
             "answer": "A safe draft response.",
+            "language_detected": "english",
             "metadata": {"fallback_used": False},
         }
 
     monkeypatch.setattr(webhook_service, "SessionLocal", factory)
-    monkeypatch.setattr(webhook_service.rag_service, "detect_language", lambda _text: "english")
     monkeypatch.setattr(webhook_service, "detect_sentiment", lambda _text: "neutral")
     monkeypatch.setattr(webhook_service.rag_service, "query", generated_reply)
     monkeypatch.setattr(
@@ -139,3 +139,28 @@ def test_auto_send_without_integration_retains_draft_for_retry(monkeypatch):
         assert automatic_messages == []
     finally:
         verify_session.close()
+
+def test_auto_send_records_the_reply_as_ai(monkeypatch):
+    factory = _database()
+    session = factory()
+    try:
+        business, _user, conversation, _message = _tenant_records(session, auto_mode=True)
+        session.add(Integration(business_id=business.id, platform="facebook", page_id="page-1", access_token="token"))
+        session.commit()
+
+        async def accepted_by_platform(**_kwargs):
+            return {"message_id": "platform-message-1"}
+
+        monkeypatch.setattr(webhook_service.messaging_service, "send_message", accepted_by_platform)
+        asyncio.run(
+            webhook_service.dispatch_auto_ai_reply(
+                session, conversation.id, business.id, "Automatic reply"
+            )
+        )
+
+        automatic_reply = session.query(Message).filter(Message.content == "Automatic reply").one()
+        assert automatic_reply.sender_type == "ai"
+        assert automatic_reply.sender_id is None
+        assert automatic_reply.ai_metadata["response_mode"] == "auto"
+    finally:
+        session.close()

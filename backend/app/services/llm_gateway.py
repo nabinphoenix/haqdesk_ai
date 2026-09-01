@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import logging
 import asyncio
@@ -8,6 +9,10 @@ import litellm
 from app.core.config import settings
 
 logger = logging.getLogger("uvicorn")
+
+# Strip <think>...</think> reasoning blocks emitted by Qwen3 and similar models.
+# Also handles unclosed <think> tags if generation is cut off.
+_THINK_TAG_RE = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
 
 class LLMGatewayError(Exception):
     pass
@@ -110,8 +115,11 @@ class LLMGateway:
                     content = response.choices[0].message.content
                     if not content or not content.strip():
                         raise ValueError("LLM returned empty response")
-                        
-                    content = content.strip()
+
+                    # Strip reasoning blocks (Qwen3, DeepSeek-R1, etc.) before returning
+                    content = _THINK_TAG_RE.sub("", content).strip()
+                    if not content:
+                        raise ValueError("LLM returned only reasoning content, no final answer")
                     
                     latency_ms = (time.time() - start_time) * 1000
                     fallback_used = idx > 0

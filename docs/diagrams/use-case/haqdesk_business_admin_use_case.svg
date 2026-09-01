@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2800" height="1700" viewBox="0 0 2800 1700" role="img" aria-labelledby="title desc">
+  <title id="title">HaqDesk AI – Business Administration Use Case Diagram</title>
+  <desc id="desc">Black and white UML use case diagram with Business Admin as the sole primary actor. It shows verified authentication, business, staff, integrations, knowledge base, customer support, analytics, and internal chat capabilities.</desc>
+  <defs>
+    <marker id="open-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+      <path d="M 1 1 L 10 6 L 1 11" fill="white" stroke="#111111" stroke-width="1.5"/>
+    </marker>
+    <style>
+      .page { fill: #ffffff; }
+      .system { fill: #ffffff; stroke: #111111; stroke-width: 3; }
+      .section { fill: #ffffff; stroke: #555555; stroke-width: 1.5; }
+      .usecase { fill: #ffffff; stroke: #111111; stroke-width: 2; }
+      .heading { font-family: Arial, Helvetica, sans-serif; fill: #111111; font-weight: 700; }
+      .body { font-family: Arial, Helvetica, sans-serif; fill: #111111; }
+      .section-label { font-family: Arial, Helvetica, sans-serif; fill: #111111; font-size: 19px; font-weight: 700; }
+      .uc-label { font-family: Arial, Helvetica, sans-serif; fill: #111111; font-size: 17px; font-weight: 600; text-anchor: middle; }
+      .uc-small { font-family: Arial, Helvetica, sans-serif; fill: #111111; font-size: 15px; font-weight: 600; text-anchor: middle; }
+      .association { fill: none; stroke: #333333; stroke-width: 1.6; }
+      .relationship { fill: none; stroke: #111111; stroke-width: 1.8; stroke-dasharray: 8 6; marker-end: url(#open-arrow); }
+      .rel-label { font-family: Arial, Helvetica, sans-serif; fill: #111111; font-size: 14px; font-style: italic; text-anchor: middle; }
+      .note { font-family: Arial, Helvetica, sans-serif; fill: #333333; font-size: 14px; }
+    </style>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="2800" height="1700"/>
+  <text class="heading" x="1400" y="48" font-size="30" text-anchor="middle">Business Administration Use Case Diagram</text>
+  <text class="body" x="1400" y="78" font-size="16" text-anchor="middle">Verified implementation scope • primary actor: Business Admin</text>
+
+  <!-- Primary actor -->
+  <g aria-label="Business Admin actor">
+    <circle cx="145" cy="770" r="27" fill="#ffffff" stroke="#111111" stroke-width="2.5"/>
+    <path d="M145 797 L145 875 M105 825 L185 825 M145 875 L108 928 M145 875 L182 928" fill="none" stroke="#111111" stroke-width="2.5" stroke-linecap="round"/>
+    <text class="heading" x="145" y="965" font-size="20" text-anchor="middle">Business Admin</text>
+  </g>
+
+  <!-- System boundary -->
+  <rect class="system" x="300" y="110" width="2410" height="1500"/>
+  <rect x="320" y="94" width="455" height="32" fill="#ffffff"/>
+  <text class="heading" x="330" y="117" font-size="22">HaqDesk AI – Business Administration</text>
+
+  <!-- Section boxes -->
+  <rect class="section" x="360" y="145" width="830" height="320"/>
+  <text class="section-label" x="382" y="178">Authentication and Business Account</text>
+
+  <rect class="section" x="360" y="490" width="830" height="330"/>
+  <text class="section-label" x="382" y="523">Staff Management</text>
+
+  <rect class="section" x="360" y="845" width="830" height="440"/>
+  <text class="section-label" x="382" y="878">Communication Integrations</text>
+
+  <rect class="section" x="1240" y="145" width="1320" height="500"/>
+  <text class="section-label" x="1262" y="178">Knowledge Base</text>
+
+  <rect class="section" x="1240" y="670" width="1320" height="635"/>
+  <text class="section-label" x="1262" y="703">Customer Support</text>
+
+  <rect class="section" x="360" y="1330" width="830" height="230"/>
+  <text class="section-label" x="382" y="1363">Analytics and Collaboration</text>
+
+  <!-- Use cases: Authentication and Business Account -->
+  <ellipse class="usecase" cx="560" cy="260" rx="175" ry="34"/>
+  <text class="uc-label" x="560" y="266">Register Business</text>
+  <ellipse class="usecase" cx="990" cy="260" rx="175" ry="34"/>
+  <text class="uc-label" x="990" y="266">Login / Logout</text>
+  <ellipse class="usecase" cx="560" cy="370" rx="190" ry="34"/>
+  <text class="uc-small" x="560" y="376">Manage Business Profile</text>
+  <ellipse class="usecase" cx="990" cy="370" rx="175" ry="34"/>
+  <text class="uc-label" x="990" y="376">Manage Settings</text>
+
+  <!-- Use cases: Staff Management -->
+  <ellipse class="usecase" cx="560" cy="610" rx="185" ry="34"/>
+  <text class="uc-small" x="560" y="616">View Staff &amp; Presence</text>
+  <ellipse class="usecase" cx="990" cy="610" rx="165" ry="34"/>
+  <text class="uc-label" x="990" y="616">Invite Staff</text>
+  <ellipse class="usecase" cx="560" cy="725" rx="195" ry="34"/>
+  <text class="uc-small" x="560" y="721">Assign Role during Invitation</text>
+  <ellipse class="usecase" cx="990" cy="725" rx="165" ry="34"/>
+  <text class="uc-label" x="990" y="731">Remove Staff</text>
+
+  <!-- Use cases: Communication Integrations -->
+  <ellipse class="usecase" cx="560" cy="935" rx="195" ry="34"/>
+  <text class="uc-small" x="560" y="941">Access Integration Settings</text>
+  <ellipse class="usecase" cx="990" cy="935" rx="180" ry="34"/>
+  <text class="uc-small" x="990" y="941">View Integration Status</text>
+  <ellipse class="usecase" cx="560" cy="1050" rx="180" ry="34"/>
+  <text class="uc-small" x="560" y="1056">Connect Meta Channels</text>
+  <ellipse class="usecase" cx="990" cy="1050" rx="165" ry="34"/>
+  <text class="uc-label" x="990" y="1056">Connect Gmail</text>
+  <ellipse class="usecase" cx="775" cy="1190" rx="220" ry="34"/>
+  <text class="uc-small" x="775" y="1196">Update / Reconnect Integration</text>
+
+  <!-- Use cases: Knowledge Base -->
+  <ellipse class="usecase" cx="1440" cy="240" rx="180" ry="34"/>
+  <text class="uc-label" x="1440" y="246">Access Knowledge Base</text>
+  <ellipse class="usecase" cx="2020" cy="240" rx="235" ry="34"/>
+  <text class="uc-small" x="2020" y="246">View Documents &amp; Processing Status</text>
+  <ellipse class="usecase" cx="1440" cy="380" rx="165" ry="34"/>
+  <text class="uc-label" x="1440" y="386">Upload Documents</text>
+  <ellipse class="usecase" cx="2020" cy="380" rx="165" ry="34"/>
+  <text class="uc-label" x="2020" y="386">Search Knowledge</text>
+  <ellipse class="usecase" cx="1440" cy="520" rx="230" ry="34"/>
+  <text class="uc-small" x="1440" y="526">Update / Re-index Document Content</text>
+  <ellipse class="usecase" cx="2020" cy="520" rx="150" ry="34"/>
+  <text class="uc-label" x="2020" y="526">Delete Document</text>
+
+  <!-- Use cases: Customer Support -->
+  <ellipse class="usecase" cx="1440" cy="760" rx="180" ry="34"/>
+  <text class="uc-label" x="1440" y="766">Access Unified Inbox</text>
+  <ellipse class="usecase" cx="2020" cy="760" rx="210" ry="34"/>
+  <text class="uc-small" x="2020" y="766">View Customer Conversations</text>
+  <ellipse class="usecase" cx="1440" cy="900" rx="200" ry="34"/>
+  <text class="uc-small" x="1440" y="906">View Customer Information</text>
+  <ellipse class="usecase" cx="2020" cy="900" rx="220" ry="34"/>
+  <text class="uc-small" x="2020" y="906">Generate AI-Assisted Response</text>
+  <ellipse class="usecase" cx="1440" cy="1045" rx="230" ry="34"/>
+  <text class="uc-small" x="1440" y="1051">Review / Edit / Dismiss AI Draft</text>
+  <ellipse class="usecase" cx="2020" cy="1045" rx="190" ry="34"/>
+  <text class="uc-label" x="2020" y="1051">Write Manual Response</text>
+  <ellipse class="usecase" cx="1730" cy="1190" rx="200" ry="34"/>
+  <text class="uc-small" x="1730" y="1196">Send Customer Response</text>
+
+  <!-- Use cases: Analytics and Collaboration -->
+  <ellipse class="usecase" cx="560" cy="1450" rx="255" ry="34"/>
+  <text class="uc-small" x="560" y="1456">View Analytics &amp; Export Reports</text>
+  <ellipse class="usecase" cx="990" cy="1450" rx="145" ry="34"/>
+  <text class="uc-label" x="990" y="1456">Internal Chat</text>
+
+  <!-- Actor associations: solid lines, no arrowheads -->
+  <path class="association" d="M172 799 L385 260"/>
+  <path class="association" d="M172 810 L815 260"/>
+  <path class="association" d="M172 822 L370 370"/>
+  <path class="association" d="M172 835 L815 370"/>
+  <path class="association" d="M172 850 L375 610"/>
+  <path class="association" d="M172 884 L365 935"/>
+  <path class="association" d="M172 895 L1260 240"/>
+  <path class="association" d="M172 907 L1260 760"/>
+  <path class="association" d="M172 919 L310 1450"/>
+  <path class="association" d="M172 930 L845 1450"/>
+
+  <!-- Include / extend relationships -->
+  <path class="relationship" d="M825 622 L755 697"/>
+  <text class="rel-label" x="785" y="653">&lt;&lt;include&gt;&gt;</text>
+  <path class="relationship" d="M825 610 L745 610"/>
+  <text class="rel-label" x="785" y="594">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M825 725 L745 635"/>
+  <text class="rel-label" x="780" y="692">&lt;&lt;extend&gt;&gt;</text>
+
+  <path class="relationship" d="M755 935 L810 935"/>
+  <text class="rel-label" x="782" y="919">&lt;&lt;include&gt;&gt;</text>
+
+  <path class="relationship" d="M560 1016 L560 972"/>
+  <text class="rel-label" x="645" y="1000">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M990 1016 L650 950"/>
+  <text class="rel-label" x="825" y="977">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M775 1156 L620 972"/>
+  <text class="rel-label" x="690" y="1088">&lt;&lt;extend&gt;&gt;</text>
+
+  <path class="relationship" d="M1620 240 L1782 240"/>
+  <text class="rel-label" x="1700" y="224">&lt;&lt;include&gt;&gt;</text>
+  <path class="relationship" d="M1440 346 L1440 276"/>
+  <text class="rel-label" x="1534" y="318">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M2020 346 L1535 266"/>
+  <text class="rel-label" x="1780" y="308">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M1440 486 L1440 276"/>
+  <text class="rel-label" x="1538" y="420">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M2020 486 L1535 270"/>
+  <text class="rel-label" x="1788" y="412">&lt;&lt;extend&gt;&gt;</text>
+
+  <path class="relationship" d="M1618 760 L1795 760"/>
+  <text class="rel-label" x="1710" y="744">&lt;&lt;include&gt;&gt;</text>
+  <path class="relationship" d="M1440 866 L1810 790"/>
+  <text class="rel-label" x="1640" y="832">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M2020 866 L2020 798"/>
+  <text class="rel-label" x="2114" y="837">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M1628 1045 L1800 924"/>
+  <text class="rel-label" x="1716" y="1005">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M2020 1011 L1835 1220"/>
+  <text class="rel-label" x="1940" y="1120">&lt;&lt;extend&gt;&gt;</text>
+  <path class="relationship" d="M1440 798 L1580 1160"/>
+  <text class="rel-label" x="1500" y="1000">&lt;&lt;extend&gt;&gt;</text>
+
+  <!-- Legend / scope note -->
+  <g transform="translate(1450 1360)">
+    <text class="heading" x="0" y="0" font-size="16">UML notation</text>
+    <path class="association" d="M0 25 L70 25"/>
+    <text class="note" x="82" y="30">association</text>
+    <path class="relationship" d="M0 52 L70 52"/>
+    <text class="note" x="82" y="57">dashed arrow: &lt;&lt;include&gt;&gt; / &lt;&lt;extend&gt;&gt;</text>
+    <text class="note" x="0" y="88">Only verified tenant-level operations are shown.</text>
+  </g>
+</svg>

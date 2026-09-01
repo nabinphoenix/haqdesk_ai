@@ -89,9 +89,8 @@ export default function TeamPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
-
   const [summary, setSummary] = useState<TeamSummary>(EMPTY_SUMMARY);
-  const isAdmin = userRole === "business_admin" || userRole === "super_admin";
+  const isBusinessAdmin = userRole === "business_admin";
 
   useEffect(() => {
     setUserRole(localStorage.getItem("userRole"));
@@ -139,8 +138,8 @@ export default function TeamPage() {
   }, [fetchTeamMetrics]);
 
   const onlineCount = members.filter((m) => m.status === "online").length;
-
   const handleRemove = (id: number) => {
+    if (!isBusinessAdmin) return;
     const member = members.find((item) => item.id === id);
     if (member) setMemberToRemove(member);
   };
@@ -154,11 +153,11 @@ export default function TeamPage() {
       });
       if (res.ok) {
         setMembers((prev) => prev.filter((member) => member.id !== memberToRemove.id));
-        toast.success(`Removed ${memberToRemove.name} from the team.`);
+        toast.success(`${memberToRemove.name} was permanently deleted.`);
         setMemberToRemove(null);
       } else {
         const data = await res.json();
-        toast.error(data.detail || "Failed to remove member.");
+        toast.error(data.detail || "Failed to delete member.");
       }
     } catch {
       toast.error("Cannot connect to server.");
@@ -226,13 +225,13 @@ export default function TeamPage() {
     <div className="page-padded font-body">
       <ConfirmModal
         isOpen={memberToRemove !== null}
-        title="Remove Team Member"
+        title="Delete Team Member"
         message={
           memberToRemove
-            ? `${memberToRemove.name} will lose access to this business and its conversations.`
+            ? `${memberToRemove.name} will be permanently deleted from this business. Their account access will be removed and this cannot be undone.`
             : ""
         }
-        confirmLabel={isRemovingMember ? "Removing…" : "Remove Member"}
+        confirmLabel={isRemovingMember ? "Deleting..." : "Delete account"}
         cancelLabel="Cancel"
         onConfirm={executeRemove}
         onCancel={() => setMemberToRemove(null)}
@@ -258,7 +257,7 @@ export default function TeamPage() {
                 Manage your support agents, roles, and access.
               </p>
             </div>
-            {isAdmin && (
+            {isBusinessAdmin && (
               <button
                 onClick={() => setShowInviteModal(true)}
                 className="flex items-center gap-2.5 px-6 py-3 bg-accent text-on-accent rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] shadow-xl shadow-purple-950/20 hover-glow transition-all active:scale-95"
@@ -353,13 +352,16 @@ export default function TeamPage() {
                     <span className="text-[13px] font-medium text-muted-foreground">{member.avgResponse}</span>
                   </div>
 
-                  {/* Remove */}
-                  {isAdmin && (
+                  {/* Permanent deletion is available only to the business admin and never for another admin. */}
+                  {isBusinessAdmin && member.role !== "Admin" && (
                     <button
+                      type="button"
                       onClick={() => handleRemove(member.id)}
-                      className="p-1.5 text-muted-foreground hover:text-[var(--error-foreground)] hover:bg-red-950/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      aria-label={`Delete ${member.name}`}
+                      title="Delete team member"
+                      className="rounded-lg p-1.5 text-muted-foreground opacity-100 transition-all hover:bg-red-950/20 hover:text-[var(--error-foreground)] md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                     >
-                      <Trash2 size={13} strokeWidth={2} />
+                      <Trash2 size={13} strokeWidth={2} aria-hidden="true" />
                     </button>
                   )}
                 </motion.div>
@@ -376,7 +378,6 @@ export default function TeamPage() {
 
         </div>
       </div>
-
       {/* Invite Modal */}
       <AnimatePresence>
         {showInviteModal && (
@@ -399,6 +400,10 @@ export default function TeamPage() {
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
                     Send an invite to join your support team.
                   </p>
+                  <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-accent/20 bg-accent/10 px-3 py-2.5 text-[11px] leading-5 text-muted-foreground">
+                    <ShieldCheck size={15} className="mt-0.5 shrink-0 text-accent-glow" />
+                    <span><strong className="text-foreground">Secure access:</strong> teammates use their own HaqDesk login. Never share your Instagram, WhatsApp, or Messenger passwords.</span>
+                  </div>
                 </div>
                 <button
                   onClick={handleCloseInviteModal}
@@ -446,7 +451,7 @@ export default function TeamPage() {
               ) : (
                 <form onSubmit={handleGenerateInviteLink} className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Agent Email</label>
+                    <label className="block text-[10px] font-black text-accent-glow uppercase tracking-widest mb-1.5">Team member email</label>
                     <input
                       type="email"
                       value={inviteEmail}

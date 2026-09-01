@@ -15,6 +15,8 @@ from app.models.invitation import Invitation
 from app.models.business import Business
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.customer_identity import CustomerIdentity
+from app.models.internal_messaging import InternalMessage, InternalThreadParticipant
 from app.auth.utils import hash_password, pwd_context
 from app.core.dependencies import get_current_user, require_business_admin
 
@@ -130,6 +132,9 @@ def _build_invite_email_html(
             <p style="margin:0 0 6px;color:#6b7280;font-size:12px;line-height:1.5;">
               This link expires in <strong style="color:#9ca3af;">7 days</strong>.
               If you did not expect this invitation, you can safely ignore this email.
+            </p>
+            <p style="margin:12px 0 0;color:#6b7280;font-size:12px;line-height:1.5;">
+              Sign in with your own HaqDesk account. Social channel passwords are never required.
             </p>
           </td>
         </tr>
@@ -486,7 +491,7 @@ async def team_metrics(
         if message.sender_type == "customer":
             pending_customer_at.setdefault(message.conversation_id, message.timestamp)
             continue
-        if message.sender_type != "agent" or message.conversation_id not in pending_customer_at:
+        if message.sender_type not in {"agent", "ai"} or message.conversation_id not in pending_customer_at:
             continue
 
         customer_at = pending_customer_at.pop(message.conversation_id)
@@ -497,7 +502,7 @@ async def team_metrics(
 
         metadata = message.ai_metadata if isinstance(message.ai_metadata, dict) else {}
         response_mode = metadata.get("response_mode")
-        if response_mode == "auto" or (not response_mode and message.sender_id is None):
+        if message.sender_type == "ai" or response_mode == "auto" or (not response_mode and message.sender_id is None):
             auto_times.append(seconds)
         else:
             review_times.append(seconds)
@@ -552,7 +557,7 @@ async def team_metrics(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ADMIN-ONLY: Remove a team member  (requires JWT)
+# ADMIN-ONLY: Permanently delete a team member (business-admin only)
 # DELETE /api/v1/team/members/{user_id}
 # ──────────────────────────────────────────────────────────────────────────────
 @router.delete("/members/{user_id}")
@@ -561,18 +566,53 @@ async def remove_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove a team member. Admins only, cannot remove yourself."""
-    if current_user.role not in (UserRole.BUSINESS_ADMIN, UserRole.SUPER_ADMIN):
-        raise HTTPException(status_code=403, detail="Only admins can remove members")
-
+    """Permanently delete an agent or supervisor from the current business."""
+    if current_user.role != UserRole.BUSINESS_ADMIN.value:
+        raise HTTPException(status_code=403, detail="Only the business admin can delete team members")
+    if not current_user.business_id:
+        raise HTTPException(status_code=403, detail="No business associated")
     if current_user.id == user_id:
-        raise HTTPException(status_code=400, detail="You cannot remove yourself")
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
 
-    member = db.query(User).filter(User.id == user_id).first()
-    if not member or member.business_id != current_user.business_id:
-        raise HTTPException(status_code=404, detail="Member not found")
+    member = db.query(User).filter(
+        User.id == user_id,
+        User.business_id == current_user.business_id,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    if member.role not in (UserRole.AGENT.value, UserRole.SUPERVISOR.value):
+        raise HTTPException(status_code=403, detail="Only agents and supervisors can be deleted")
 
-    db.delete(member)
-    db.commit()
+    member_name = member.name or member.email
+    try:
+        # Keep customer conversations and replies, but remove the deleted user's identity.
+        db.query(Conversation).filter(
+            Conversation.business_id == current_user.business_id,
+            Conversation.assigned_agent_id == member.id,
+        ).update({Conversation.assigned_agent_id: None}, synchronize_session=False)
+        db.query(Message).filter(Message.sender_id == member.id).update(
+            {Message.sender_id: None}, synchronize_session=False
+        )
+        # Nullable audit references must be cleared before deleting the user.
+        db.query(CustomerIdentity).filter(CustomerIdentity.linked_by_user_id == member.id).update(
+            {CustomerIdentity.linked_by_user_id: None}, synchronize_session=False
+        )
+        # Internal messages have a non-null user foreign key, so remove only this
+        # member's internal messages and participant memberships first.
+        db.query(InternalMessage).filter(InternalMessage.sender_id == member.id).delete(
+            synchronize_session=False
+        )
+        db.query(InternalThreadParticipant).filter(InternalThreadParticipant.user_id == member.id).delete(
+            synchronize_session=False
+        )
+        db.delete(member)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to permanently delete team member")
 
-    return {"detail": f"Member {member.name} removed successfully"}
+    return {
+        "detail": f"{member_name} was permanently deleted",
+        "user_id": user_id,
+        "status": "deleted",
+    }

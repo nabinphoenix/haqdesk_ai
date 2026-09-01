@@ -41,6 +41,7 @@ async def get_business_settings(
         "description": business.description,
         "is_active": business.is_active,
         "ai_response_mode": business.ai_response_mode or "review",
+        "onboarding_completed": business.onboarding_completed is True,
     }
 
 @router.patch("/business")
@@ -60,7 +61,11 @@ async def update_business_settings(
         raise HTTPException(status_code=404, detail="Business not found")
 
     if payload.name is not None:
-        business.name = payload.name
+        normalized_name = payload.name.strip()
+        duplicate = db.query(Business).filter(Business.name == normalized_name, Business.id != business.id).first() if normalized_name else None
+        if duplicate:
+            raise HTTPException(status_code=400, detail="A business with this name already exists.")
+        business.name = normalized_name
     if payload.email is not None:
         business.email = payload.email
     if payload.phone is not None:
@@ -69,6 +74,21 @@ async def update_business_settings(
         business.website = payload.website
     if payload.description is not None:
         business.description = payload.description
+    # Completing the profile is the only way to clear the first-login gate for
+    # a Google-created business admin. Invited teammates never reach this
+    # admin-only endpoint and are therefore unaffected.
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if role == "business_admin" and (current_user.provider or "").lower() == "google" and business.onboarding_completed is not True:
+        required = {
+            "Business name": business.name,
+            "Business email": business.email,
+            "Website": business.website,
+            "Phone": business.phone,
+        }
+        missing = [label for label, value in required.items() if not value or not str(value).strip()]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Please complete: {', '.join(missing)}")
+        business.onboarding_completed = True
     if payload.ai_response_mode is not None:
         if payload.ai_response_mode not in ["review", "auto"]:
             raise HTTPException(status_code=400, detail="Invalid ai_response_mode. Must be 'review' or 'auto'")
@@ -84,4 +104,5 @@ async def update_business_settings(
         "website": business.website,
         "description": business.description,
         "ai_response_mode": business.ai_response_mode,
+        "onboarding_completed": business.onboarding_completed is True,
     }}

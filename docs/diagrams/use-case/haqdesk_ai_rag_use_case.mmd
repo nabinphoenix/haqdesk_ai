@@ -1,0 +1,89 @@
+flowchart LR
+    %% HaqDesk AI - AI-Assisted Response and RAG Use Case Diagram
+
+    STAFF[Support Staff]
+    ADMIN[Business Admin]
+    CUSTOMER[Customer / End User]
+    CHANNEL[Communication Platform]
+
+    ADMIN -- generalizes --> STAFF
+
+    subgraph SYSTEM[HaqDesk AI - AI-Assisted Customer Response]
+        direction TB
+
+        subgraph RETRIEVAL[Knowledge Retrieval and Context Assembly]
+            RETRIEVE([Retrieve Relevant Business Knowledge])
+            CONTEXT([Use Conversation Context])
+            DRAFT([Generate AI Response Draft])
+            TEST([Test Knowledge Retrieval])
+        end
+
+        subgraph EXPLAINABILITY[Metadata, Confidence and Explainability]
+            SOURCES([Display Retrieved Sources])
+            CONFIDENCE([Display Confidence / Similarity Info])
+            SENTIMENT([View Sentiment / Language Info])
+        end
+
+        subgraph ORCHESTRATION[Central AI Response Generation]
+            GENERATE([Generate AI-Assisted Response])
+            AUTO([Automatically Dispatch AI Response])
+        end
+
+        subgraph REVIEW[Human-in-the-Loop Review and Decision]
+            REVIEW_DRAFT([Review AI Draft])
+            ACCEPT([Accept AI Draft])
+            EDIT([Edit AI Draft])
+            REJECT([Reject AI Draft])
+            FALLBACK([Human Fallback])
+            APPROVE([Send Approved Response])
+        end
+
+        subgraph DELIVERY[Channel Ingestion and Dispatch]
+            INBOUND([Deliver Incoming Message])
+            OUTBOUND([Deliver Outgoing Response])
+        end
+    end
+
+    SEND([Send Customer Message])
+    RECEIVE([Receive Business Reply])
+
+    STAFF --- REVIEW_DRAFT
+    STAFF --- ACCEPT
+    STAFF --- EDIT
+    STAFF --- REJECT
+    STAFF --- FALLBACK
+    STAFF --- APPROVE
+    ADMIN --- TEST
+    CUSTOMER --- SEND
+    CUSTOMER --- RECEIVE
+    CHANNEL --- INBOUND
+    CHANNEL --- OUTBOUND
+
+    SEND -. "<<include>>" .-> INBOUND
+    INBOUND -. "<<include>>" .-> GENERATE
+    GENERATE -. "<<include>>" .-> RETRIEVE
+    GENERATE -. "<<include>>" .-> CONTEXT
+    GENERATE -. "<<include>>" .-> DRAFT
+    SOURCES -. "<<extend>>" .-> REVIEW_DRAFT
+    CONFIDENCE -. "<<extend>>" .-> REVIEW_DRAFT
+    SENTIMENT -. "<<extend>>" .-> REVIEW_DRAFT
+    REVIEW_DRAFT -. "<<extend>> [Review Mode]" .-> GENERATE
+    ACCEPT -. "<<extend>>" .-> REVIEW_DRAFT
+    EDIT -. "<<extend>>" .-> REVIEW_DRAFT
+    REJECT -. "<<extend>>" .-> REVIEW_DRAFT
+    ACCEPT -. "<<include>>" .-> APPROVE
+    EDIT -. "<<include>>" .-> APPROVE
+    REJECT -. "<<extend>>" .-> FALLBACK
+    FALLBACK -. "<<extend>>" .-> APPROVE
+    AUTO -. "<<extend>> [Auto AI Mode]" .-> GENERATE
+    AUTO -. "<<include>>" .-> OUTBOUND
+    APPROVE -. "<<include>>" .-> OUTBOUND
+    OUTBOUND -. "<<include>>" .-> RECEIVE
+
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    style SYSTEM fill:#ffffff,stroke:#000000,stroke-width:2px;
+    style RETRIEVAL fill:#fafafa,stroke:#888888,stroke-dasharray: 4 4;
+    style EXPLAINABILITY fill:#fafafa,stroke:#888888,stroke-dasharray: 4 4;
+    style ORCHESTRATION fill:#fafafa,stroke:#888888,stroke-dasharray: 4 4;
+    style REVIEW fill:#fafafa,stroke:#888888,stroke-dasharray: 4 4;
+    style DELIVERY fill:#fafafa,stroke:#888888,stroke-dasharray: 4 4;

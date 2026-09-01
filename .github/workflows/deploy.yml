@@ -1,0 +1,102 @@
+name: Deploy HaqDesk AI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  EB_APPLICATION_NAME: HaqDesk
+  EB_ENVIRONMENT_NAME: HaqDesk-Prod
+  EB_S3_BUCKET: elasticbeanstalk-us-east-1-359290906799
+  PRODUCTION_URL: https://haqdesk.tekbahadursarki.com.np
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests (currently non-blocking)
+        continue-on-error: true
+        working-directory: frontend
+        run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://haqdesk.tekbahadursarki.com.np
+        run: npm run build
+
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements.txt
+
+      - name: Run backend tests (currently non-blocking)
+        continue-on-error: true
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite:///./ci.db
+          SECRET_KEY: ci-only-secret-not-used-in-production
+          QDRANT_ALLOW_LOCAL_FALLBACK: 'true'
+          PYTHONPATH: .
+        run: python -m pytest -q tests
+
+      - name: Prepare Elastic Beanstalk bundle
+        run: |
+          chmod +x scripts/start-eb.sh .platform/hooks/prebuild/10_install_runtime_dependencies.sh
+          mkdir -p deploy
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.codex' --exclude='deploy' --exclude='node_modules' --exclude='.venv' --exclude='backend/venv' ./ deploy/
+          cd deploy
+          zip -r "../haqdesk-${GITHUB_SHA}.zip" . -x '*.pyc' '__pycache__/*' 'frontend/coverage/*' 'backend/logs/*'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload application bundle
+        run: aws s3 cp "haqdesk-${GITHUB_SHA}.zip" "s3://${EB_S3_BUCKET}/versions/haqdesk-${GITHUB_SHA}.zip"
+
+      - name: Create Elastic Beanstalk application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION_NAME" \
+            --version-label "haqdesk-${GITHUB_SHA}" \
+            --source-bundle S3Bucket="$EB_S3_BUCKET",S3Key="versions/haqdesk-${GITHUB_SHA}.zip" \
+            --process
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          aws elasticbeanstalk update-environment \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-name "$EB_ENVIRONMENT_NAME" \
+            --version-label "haqdesk-${GITHUB_SHA}"
+          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENVIRONMENT_NAME"
+
+      - name: Verify deployed HTTP endpoint
+        run: curl --fail --retry 10 --retry-delay 10 --retry-all-errors "http://haqdesk.tekbahadursarki.com.np/"

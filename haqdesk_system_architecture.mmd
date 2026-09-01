@@ -1,37 +1,112 @@
-flowchart LR
-  classDef core fill:#F4F1FF,stroke:#6D4AE2,stroke-width:2px,color:#0F172A;
-  classDef data fill:#F8FAFC,stroke:#475569,stroke-width:2px,color:#0F172A;
-  classDef external fill:#FFFFFF,stroke:#E2E8F0,stroke-width:2px,color:#0F172A;
-  classDef partial fill:#FFFBEB,stroke:#F59E0B,stroke-width:2px,stroke-dasharray:7 5,color:#0F172A;
+flowchart TB
+    %% Styling Classes
+    classDef actor fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+    classDef externalActor fill:#FEF3C7,stroke:#F59E0B,stroke-width:2px,color:#78350F;
+    classDef presentation fill:#FFFFFF,stroke:#94A3B8,stroke-width:2px,color:#0F172A;
+    classDef backend fill:#FFFFFF,stroke:#64748B,stroke-width:2px,color:#0F172A;
+    classDef ai fill:#FAF5FF,stroke:#A855F7,stroke-width:2px,color:#581C87;
+    classDef data fill:#F8FAFC,stroke:#475569,stroke-width:2px,color:#0F172A;
+    classDef activeChannel fill:#F0FDF4,stroke:#16A34A,stroke-width:2px,color:#14532D;
+    classDef extChannel fill:#FFFBEB,stroke:#D97706,stroke-width:2px,stroke-dasharray:5 4,color:#78350F;
+    classDef llm fill:#FAF5FF,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
 
-  Customer --> FB[Facebook Messenger]
-  Customer --> IG[Instagram Direct]
-  Customer --> Email[Email]
-  Customer -.-> WA[WhatsApp<br/>Partial / not verified]
-  FB --> Meta[Meta webhooks + Graph API]
-  IG --> Meta
-  Meta --> Webhooks[FastAPI webhook processing]
-  Email --> Poller[IMAP poller / SMTP]
-  Poller --> Backend
-  Webhooks --> Backend[FastAPI backend]
-  Backend --> Auth[JWT authentication + RBAC]
-  Backend --> Inbox[Inbox + conversation management]
-  Backend --> RAG[AI / RAG service]
-  Backend --> Analytics[Analytics service]
-  Backend --> Team[Team + business settings]
-  Dashboard[Next.js dashboard<br/>Inbox • Knowledge • Analytics • Team • Settings] <-->|secured APIs| Backend
-  Backend --> PG[(PostgreSQL<br/>businesses, users, customers, conversations,<br/>messages, integrations, knowledge metadata)]
-  RAG --> Q[(Qdrant<br/>techsuru_collection<br/>business_id filtered)]
-  RAG --> LLM[LiteLLM gateway<br/>Groq primary + configured fallbacks]
-  Backend --> Files[Local file storage<br/>temporary ingestion + chat attachments]
-  Backend -->|approved reply| Meta
-  Meta --> FB
-  Meta --> IG
-  Analytics -->|tenant aggregates| PG
-  Security[Every business query is restricted<br/>by authenticated business_id] --- Backend
+    subgraph ACTORS["System Actors"]
+        Admin["Business Admin / Super Admin"]:::actor
+        Staff["Support Staff (Supervisor / Agent)"]:::actor
+        Customer["End Customer (External User)"]:::externalActor
+    end
 
-  class Backend,Webhooks,Auth,Inbox,RAG,Analytics,Team,Meta,LLM,Q core;
-  class PG,Files data;
-  class Customer,FB,IG,Email,Poller,Dashboard external;
-  class WA partial;
+    subgraph PRESENTATION["Presentation Layer (Next.js 15 + TypeScript)"]
+        AuthUI["Auth & Onboarding UI"]:::presentation
+        InboxUI["Unified Inbox Workspace"]:::presentation
+        AICopilotUI["AI Draft Review Interface"]:::presentation
+        KnowledgeUI["Knowledge Base Management UI"]:::presentation
+        InternalChatUI["WebSocket Internal Chat UI"]:::presentation
+        AnalyticsUI["Analytics & SLA Dashboard"]:::presentation
+    end
 
+    subgraph APPLICATION["Application Layer (FastAPI Backend Core)"]
+        AuthService["Auth & Security Engine (JWT + RBAC + Tenant Guard)"]:::backend
+        InboxService["Unified Inbox & Customer Management Service"]:::backend
+        ChannelIngestion["Webhook & IMAP Ingestion Engine (Meta + Gmail)"]:::backend
+        DocProcessor["Document Ingestion Pipeline (PyMuPDF + Q&A Chunker)"]:::backend
+        WSManager["WebSocket Connection Manager (Internal Messaging)"]:::backend
+        AnalyticsService["Tenant Analytics & Aggregation Service"]:::backend
+        OutboundDispatcher["Outbound Reply Dispatcher (Graph API / SMTP)"]:::backend
+    end
+
+    subgraph AI_RAG["AI & RAG Orchestration Layer"]
+        SentimentNLP["Sentiment (DistilBERT) & Nepali Normalizer"]:::ai
+        EmbeddingModel["Multilingual E5 Embedding Model (1024-d)"]:::ai
+        RAGOrchestrator["Multi-Tenant RAG Service (Score Threshold = 0.45)"]:::ai
+        PromptBuilder["Unified Context & Prompt Assembly"]:::ai
+        LiteLLMGateway["LiteLLM Multi-Provider Fallback Gateway"]:::ai
+    end
+
+    subgraph PERSISTENCE["Data & Storage Layer"]
+        PostgreSQL[("PostgreSQL (Relational Tenant Database)")]:::data
+        Qdrant[("Qdrant (Multi-Tenant Vector Collections)")]:::data
+        LocalStorage["Local File Storage (/uploads)"]:::data
+    end
+
+    subgraph EXTERNAL_CHANNELS["External Communication Channels"]
+        subgraph ACTIVE_DEMO["Active FYP Demonstration Channels"]
+            FB["Facebook Messenger (Meta Webhook + Graph API)"]:::activeChannel
+            IG["Instagram Direct (Linked Page Webhook + Graph API)"]:::activeChannel
+            Gmail["Gmail (IMAP Polling SSL + SMTP TLS)"]:::activeChannel
+        end
+        subgraph EXTENSIBLE["Extensible / Future Channels"]
+            WA["WhatsApp Business API (Extension Ready)"]:::extChannel
+            CustomConnectors["Pluggable Webhook / LiveChat SDK"]:::extChannel
+        end
+    end
+
+    subgraph LLM_PROVIDERS["External AI / LLM Providers"]
+        Groq["Groq Cloud LPU (Qwen 2.5 Primary)"]:::llm
+        Gemini["Google Gemini API (2.0 Flash Fallback)"]:::llm
+        Ollama["Local Ollama Server (Local Fallback)"]:::llm
+    end
+
+    %% User interactions
+    Admin -->|HTTPS / JWT| AuthUI
+    Admin -->|HTTPS / JWT| KnowledgeUI
+    Staff -->|HTTPS / JWT| InboxUI
+    Staff -->|Review / Approve Draft| AICopilotUI
+    Staff <-->|WebSocket| InternalChatUI
+    Customer -->|Native Messages| FB
+    Customer -->|Native Messages| IG
+    Customer -->|Native Messages| Gmail
+    Customer -.->|Future Native Messages| WA
+
+    %% Presentation to Application
+    AuthUI & InboxUI & AICopilotUI & KnowledgeUI & AnalyticsUI -->|REST API Requests (JWT)| AuthService
+    AuthService --> InboxService
+    InternalChatUI <-->|WebSocket Stream| WSManager
+
+    %% External Channels to Backend
+    FB & IG -->|Meta Webhooks via ngrok| ChannelIngestion
+    Gmail -->|IMAP Poll (every 30s)| ChannelIngestion
+    OutboundDispatcher -->|Graph API POST| FB
+    OutboundDispatcher -->|Graph API POST| IG
+    OutboundDispatcher -->|SMTP TLS Send| Gmail
+
+    %% Backend to AI/RAG
+    ChannelIngestion -->|Process Incoming Message| SentimentNLP
+    DocProcessor -->|Document Text Chunks| EmbeddingModel
+    InboxService & ChannelIngestion -->|Customer Query| RAGOrchestrator
+
+    %% AI Pipeline Flow
+    SentimentNLP --> RAGOrchestrator
+    EmbeddingModel -->|Vector Generation| RAGOrchestrator
+    RAGOrchestrator -->|Retrieved Context + History| PromptBuilder
+    PromptBuilder --> LiteLLMGateway
+    LiteLLMGateway -->|API Inference| Groq
+    LiteLLMGateway -.->|Fallback| Gemini
+    LiteLLMGateway -.->|Local Fallback| Ollama
+    LiteLLMGateway -->|AI Draft Response| AICopilotUI
+
+    %% Data Layer Access
+    AuthService & InboxService & DocProcessor & AnalyticsService <-->|SQL Queries (Tenant-Scoped)| PostgreSQL
+    EmbeddingModel -->|Batch Upsert Chunks| Qdrant
+    RAGOrchestrator <-->|Cosine Search (business_id filtered)| Qdrant
+    DocProcessor <--> LocalStorage

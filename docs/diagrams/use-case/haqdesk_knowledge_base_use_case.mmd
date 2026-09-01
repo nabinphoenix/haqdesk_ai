@@ -1,0 +1,93 @@
+flowchart LR
+    %% HaqDesk AI - Knowledge Base Management Use Case Diagram (UML 2.5)
+
+    %% Actors
+    subgraph LEFT_ACTORS [ ]
+        direction TB
+        ADMIN["👤 Business Admin\n<<authorized actor>>"]
+    end
+
+    %% System Boundary
+    subgraph SYS ["HaqDesk AI – Knowledge Base Management"]
+        direction TB
+
+        %% Package 1: Document Upload & Ingestion
+        subgraph G_INGEST ["Document Ingestion & Management"]
+            UC_ACCESS_KB(["Access Knowledge Base"]):::usecase
+            UC_UPLOAD_DOC(["Upload Knowledge Document\n(PDF, DOCX, TXT max 10MB)"]):::usecase
+            UC_DELETE_DOC(["Delete Knowledge Document\n(Cascading vector purge)"]):::usecase
+        end
+
+        %% Package 2: Knowledge Catalog & Status
+        subgraph G_CATALOG ["Knowledge Catalog & Status Monitoring"]
+            UC_VIEW_DOCS(["View Uploaded Documents"]):::usecase
+            UC_VIEW_DETAILS(["View Document Details"]):::usecase
+            UC_VIEW_STATUS(["View Processing Status\n(processing, ready, failed)"]):::usecase
+            UC_SEARCH_DOCS(["Search Knowledge Documents"]):::usecase
+        end
+
+        %% Package 3: Chunk Curation
+        subgraph G_CURATION ["Knowledge Chunk Curation & Maintenance"]
+            UC_PREVIEW_CHUNKS(["Preview Knowledge Chunks\n(Extracted text & page mapping)"]):::usecase
+            UC_SEARCH_CHUNKS(["Search Knowledge Chunks"]):::usecase
+            UC_EDIT_CHUNK(["Edit Knowledge Chunk\n(Inline update & re-index)"]):::usecase
+        end
+
+        %% Package 4: Retrieval Testing Sandbox
+        subgraph G_TEST ["Interactive Retrieval Verification (Test Sandbox)"]
+            UC_TEST_RETRIEVAL(["Test Knowledge Retrieval\n(Interactive Q&A Testing)"]):::usecase
+            UC_VIEW_ANSWER(["View Generated Answer"]):::usecase
+            UC_VIEW_SOURCES(["View Retrieved Sources & Citations"]):::usecase
+            UC_VIEW_CONFIDENCE(["View Confidence Match %"]):::usecase
+        end
+
+        %% Package 5: Automated Supporting Services
+        subgraph G_AUTO ["Automated Supporting Services (System)"]
+            UC_VALIDATE_DOC(["Validate Document\n(Format, non-empty, size)"]):::autousecase
+            UC_PROCESS_DOC(["Process Document Content\n(Text extraction & chunking)"]):::autousecase
+            UC_INDEX_KNOWLEDGE(["Index Business Knowledge\n(Vector embedding & storage)"]):::autousecase
+            UC_PURGE_VECTORS(["Purge Vector Embeddings"]):::autousecase
+        end
+    end
+
+    %% Actor Associations
+    ADMIN --- UC_ACCESS_KB
+    ADMIN --- UC_UPLOAD_DOC
+    ADMIN --- UC_DELETE_DOC
+    ADMIN --- UC_PREVIEW_CHUNKS
+    ADMIN --- UC_EDIT_CHUNK
+    ADMIN --- UC_TEST_RETRIEVAL
+
+    %% Include / Extend Relationships
+    UC_ACCESS_KB -. "<<include>>" .-> UC_VIEW_DOCS
+    UC_VIEW_DOCS -. "<<include>>" .-> UC_VIEW_DETAILS
+    UC_VIEW_DOCS -. "<<include>>" .-> UC_VIEW_STATUS
+    UC_SEARCH_DOCS -. "<<extend>>" .-> UC_VIEW_DOCS
+
+    UC_PREVIEW_CHUNKS -. "<<extend>>" .-> UC_VIEW_DETAILS
+    UC_SEARCH_CHUNKS -. "<<extend>>" .-> UC_PREVIEW_CHUNKS
+
+    %% Automated Pipeline Inclusions
+    UC_UPLOAD_DOC -. "<<include>>" .-> UC_VALIDATE_DOC
+    UC_UPLOAD_DOC -. "<<include>>" .-> UC_PROCESS_DOC
+    UC_PROCESS_DOC -. "<<include>>" .-> UC_INDEX_KNOWLEDGE
+
+    UC_EDIT_CHUNK -. "<<include>>\n[Re-Index]" .-> UC_INDEX_KNOWLEDGE
+    UC_DELETE_DOC -. "<<include>>" .-> UC_PURGE_VECTORS
+
+    %% Retrieval Testing Inclusions
+    UC_TEST_RETRIEVAL -. "<<include>>" .-> UC_VIEW_ANSWER
+    UC_TEST_RETRIEVAL -. "<<include>>" .-> UC_VIEW_SOURCES
+    UC_TEST_RETRIEVAL -. "<<include>>" .-> UC_VIEW_CONFIDENCE
+
+    %% Styling for Academic B&W UML Cleanliness
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    classDef usecase fill:#ffffff,stroke:#000000,stroke-width:1.8px,color:#000000;
+    classDef autousecase fill:#ffffff,stroke:#000000,stroke-width:1.8px,stroke-dasharray: 4 3,color:#000000;
+    style SYS fill:#ffffff,stroke:#000000,stroke-width:2.2px;
+    style G_INGEST fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_CATALOG fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_CURATION fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_TEST fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_AUTO fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style LEFT_ACTORS fill:none,stroke:none;

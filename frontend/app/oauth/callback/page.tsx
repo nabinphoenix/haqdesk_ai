@@ -56,6 +56,7 @@ export default function OAuthCallback() {
           if (role === "super_admin") router.replace("/super-admin")
           else if (role === "supervisor") router.replace("/supervisor")
           else if (role === "agent") router.replace("/agent")
+          else if (data.user.onboarding_required) router.replace("/onboarding/business")
           else router.replace("/inbox")
         } else {
           alert("Failed to exchange authentication code.")

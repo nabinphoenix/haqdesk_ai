@@ -7,6 +7,8 @@ interface AISuggestionBoxProps {
     suggestion: string;
     sources: string[];
     confidence: number;
+    grounded?: boolean;
+    sourceDetails?: Array<{ filename: string; page_number?: number | null; similarity?: number; source_type?: string }>;
     onAccept: () => void;
     onEdit: () => void;
     onDismiss: () => void;
@@ -19,8 +21,10 @@ export default function AISuggestionBox({
     onAccept,
     onEdit,
     onDismiss,
+    grounded = false,
+    sourceDetails = [],
 }: AISuggestionBoxProps) {
-    const confidencePct = Math.round(confidence * 100);
+    const confidencePct = Math.round(Math.max(0, Math.min(1, confidence)) * 100);
 
     return (
         <motion.div
@@ -48,7 +52,7 @@ export default function AISuggestionBox({
                     <div className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-wash border border-surface-border rounded-lg shadow-sm">
                         <div className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
                         <span className="text-[9px] font-black text-accent-glow uppercase tracking-widest">
-                            {confidencePct}% Match
+                            {grounded ? `${confidencePct}% grounded` : "Needs review"}
                         </span>
                     </div>
                     <button
@@ -70,19 +74,22 @@ export default function AISuggestionBox({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-surface-border">
                 {/* Sources list */}
                 <div className="flex flex-wrap gap-2">
-                    {sources && sources.length > 0 ? (
+                    {grounded && sources && sources.length > 0 ? (
                         sources.map((source, i) => (
                             <div
                                 key={i}
                                 className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-wash rounded-lg border border-surface-border text-[9px] font-black text-muted-foreground uppercase tracking-wider shadow-sm"
                             >
                                 <BookOpen size={10} strokeWidth={2.5} className="text-accent-glow" />
-                                {source}
+                                {source}{(() => {
+                                    const detail = sourceDetails.find((item) => item.filename === source);
+                                    return detail?.page_number ? " - p." + detail.page_number : "";
+                                })()}
                             </div>
                         ))
                     ) : (
                         <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
-                            Knowledge Grounded
+                            No matching knowledge source - verify before sending
                         </div>
                     )}
                 </div>

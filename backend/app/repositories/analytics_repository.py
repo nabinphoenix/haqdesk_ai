@@ -56,7 +56,7 @@ class AnalyticsRepository:
         return self.db.query(
             func.count(Message.id).label("total"),
             func.count(case((Message.sender_type == "customer", 1))).label("customer"),
-            func.count(case((Message.sender_type == "agent", 1))).label("agent"),
+            func.count(case((Message.sender_type.in_(("agent", "ai")), 1))).label("agent"),
             func.count(case((Message.ai_draft.isnot(None), 1))).label("drafts"),
         ).join(Conversation, Conversation.id == Message.conversation_id).join(
             Customer, Customer.id == Conversation.customer_id
@@ -146,7 +146,7 @@ class AnalyticsRepository:
                     date_trunc('{bucket}', timezone(:timezone, m.timestamp)) AS bucket_start,
                     COUNT(*) AS all_messages,
                     COUNT(*) FILTER (WHERE m.sender_type = 'customer') AS customer_messages,
-                    COUNT(*) FILTER (WHERE m.sender_type = 'agent') AS agent_messages
+                    COUNT(*) FILTER (WHERE m.sender_type IN ('agent', 'ai')) AS agent_messages
                 FROM messages m
                 JOIN conversations c ON c.id = m.conversation_id
                 JOIN customers cu ON cu.id = c.customer_id
@@ -203,7 +203,7 @@ class AnalyticsRepository:
                 SELECT LOWER(COALESCE(m.platform, cu.platform)) AS platform,
                        COUNT(*) AS messages,
                        COUNT(*) FILTER (WHERE LOWER(m.sender_type) = 'customer') AS inbound_messages,
-                       COUNT(*) FILTER (WHERE LOWER(m.sender_type) = 'agent') AS outgoing_messages,
+                       COUNT(*) FILTER (WHERE LOWER(m.sender_type) IN ('agent', 'ai')) AS outgoing_messages,
                        COUNT(*) FILTER (WHERE LOWER(m.sender_type) = 'customer' AND LOWER(m.sentiment) = 'positive') AS positive_messages,
                        COUNT(*) FILTER (WHERE LOWER(m.sender_type) = 'customer' AND LOWER(m.sentiment) = 'neutral') AS neutral_messages,
                        COUNT(*) FILTER (WHERE LOWER(m.sender_type) = 'customer' AND LOWER(m.sentiment) = 'negative') AS negative_messages,
@@ -274,7 +274,7 @@ class AnalyticsRepository:
                 SELECT fi.*, MIN(m.timestamp) AS first_agent_at
                 FROM first_inbound fi LEFT JOIN messages m
                   ON m.conversation_id = fi.conversation_id
-                 AND LOWER(m.sender_type) = 'agent'
+                 AND LOWER(m.sender_type) IN ('agent', 'ai')
                  AND m.timestamp > fi.first_customer_at AND m.timestamp < :to_utc
                 GROUP BY fi.conversation_id, fi.platform, fi.first_customer_at
             ), durations AS (
@@ -341,7 +341,7 @@ class AnalyticsRepository:
             timestamp = "m.timestamp"
             metric_filter = {
                 "messages": "", "inbound_messages": "AND LOWER(m.sender_type) = 'customer'",
-                "outgoing_messages": "AND LOWER(m.sender_type) = 'agent'",
+                "outgoing_messages": "AND LOWER(m.sender_type) IN ('agent', 'ai')",
                 "negative_messages": "AND LOWER(m.sentiment) = 'negative'",
             }[metric]
         sql = text(f"""
@@ -441,14 +441,14 @@ class AnalyticsRepository:
                 SELECT fc.canonical_id,
                        COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc)::int AS total_messages,
                        COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='customer')::int AS customer_messages,
-                       COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='agent')::int AS business_replies,
+                       COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type) IN ('agent','ai'))::int AS business_replies,
                        COUNT(DISTINCT DATE(timezone(:timezone,m.timestamp))) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='customer')::int AS active_days,
                        COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='customer' AND LOWER(m.sentiment)='negative')::int AS negative_customer_messages,
                        COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='customer' AND LOWER(m.sentiment) IN ('positive','neutral','negative'))::int AS classified_customer_messages,
                        COUNT(*) FILTER (WHERE m.timestamp>=:from_utc AND m.timestamp<:to_utc AND LOWER(m.sender_type)='customer' AND (m.sentiment IS NULL OR LOWER(m.sentiment) NOT IN ('positive','neutral','negative')))::int AS unclassified_customer_messages,
                        MIN(m.timestamp) FILTER (WHERE LOWER(m.sender_type)='customer') AS first_customer_message_at,
                        MAX(m.timestamp) FILTER (WHERE LOWER(m.sender_type)='customer') AS last_customer_message_at,
-                       MAX(m.timestamp) FILTER (WHERE LOWER(m.sender_type)='agent') AS last_business_reply_at,
+                       MAX(m.timestamp) FILTER (WHERE LOWER(m.sender_type) IN ('agent','ai')) AS last_business_reply_at,
                        MAX(m.timestamp) AS last_message_at
                 FROM messages m JOIN filtered_conversations fc ON fc.id=m.conversation_id
                 GROUP BY fc.canonical_id
@@ -456,7 +456,7 @@ class AnalyticsRepository:
                 SELECT fc.canonical_id, fc.id AS conversation_id, m.sender_type, m.timestamp,
                        ROW_NUMBER() OVER (PARTITION BY fc.id ORDER BY m.timestamp DESC, m.id DESC) AS rn
                 FROM filtered_conversations fc JOIN messages m ON m.conversation_id=fc.id
-                WHERE fc.status IN ('open','pending') AND LOWER(m.sender_type) IN ('customer','agent')
+                WHERE fc.status IN ('open','pending') AND LOWER(m.sender_type) IN ('customer','agent','ai')
             ), waiting_stats AS (
                 SELECT canonical_id,
                        COUNT(*) FILTER (WHERE LOWER(sender_type)='customer')::int AS waiting_conversations,

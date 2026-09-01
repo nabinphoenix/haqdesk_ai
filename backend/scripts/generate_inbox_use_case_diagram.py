@@ -1,0 +1,487 @@
+import fitz
+import os
+
+svg_code = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 1350" width="2200" height="1350" style="background-color: #ffffff; font-family: 'Arial', 'Helvetica Neue', sans-serif;">
+  <defs>
+    <!-- UML Markers -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#000000" />
+    </marker>
+    <marker id="generalization" markerWidth="14" markerHeight="12" refX="13" refY="6" orient="auto">
+      <polygon points="0 0, 13 6, 0 12" fill="#ffffff" stroke="#000000" stroke-width="1.5" />
+    </marker>
+    <style>
+      .title-main { font-size: 26px; font-weight: bold; fill: #000000; text-anchor: middle; letter-spacing: 0.5px; }
+      .title-sub { font-size: 15px; fill: #444444; text-anchor: middle; }
+      .boundary-title { font-size: 20px; font-weight: bold; fill: #000000; }
+      .package-title { font-size: 14px; font-weight: bold; fill: #222222; font-style: italic; }
+      .actor-label { font-size: 15px; font-weight: bold; fill: #000000; text-anchor: middle; }
+      .actor-sub { font-size: 12px; fill: #555555; text-anchor: middle; font-style: italic; }
+      .usecase-text { font-size: 13.5px; font-weight: 600; fill: #000000; text-anchor: middle; }
+      .usecase-sub { font-size: 11.5px; fill: #444444; text-anchor: middle; }
+      .rel-text { font-size: 12px; font-weight: bold; fill: #000000; text-anchor: middle; background-color: #ffffff; }
+      .condition-text { font-size: 11px; fill: #333333; text-anchor: middle; font-style: italic; }
+      
+      .uc-oval { fill: #ffffff; stroke: #000000; stroke-width: 1.8; }
+      .assoc-line { stroke: #000000; stroke-width: 1.6; fill: none; }
+      .dep-line { stroke: #000000; stroke-width: 1.5; stroke-dasharray: 6,4; fill: none; marker-end: url(#arrowhead); }
+      .gen-line { stroke: #000000; stroke-width: 1.8; fill: none; marker-end: url(#generalization); }
+      .group-box { fill: #fafafa; stroke: #888888; stroke-width: 1.2; stroke-dasharray: 4,4; rx: 10; }
+      .legend-box { fill: #ffffff; stroke: #666666; stroke-width: 1.2; rx: 6; }
+    </style>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="2200" height="1350" fill="#ffffff" />
+
+  <!-- Main Diagram Title Header -->
+  <text x="1100" y="48" class="title-main">HaqDesk AI – Unified Inbox &amp; Customer Support Use Case Diagram</text>
+  <text x="1100" y="74" class="title-sub">Standard UML 2.5 Use Case Specification · Human-in-the-Loop AI &amp; Omnichannel Workspace</text>
+  <line x1="150" y1="92" x2="2050" y2="92" stroke="#000000" stroke-width="1.2" />
+
+  <!-- ================================================================================== -->
+  <!-- SYSTEM BOUNDARY -->
+  <!-- ================================================================================== -->
+  <rect x="360" y="115" width="1380" height="1180" rx="14" fill="#ffffff" stroke="#000000" stroke-width="2.5" />
+  <text x="390" y="152" class="boundary-title">System Boundary: HaqDesk AI – Unified Customer Support</text>
+
+  <!-- ================================================================================== -->
+  <!-- INTERNAL PACKAGES / FUNCTIONAL SUB-DOMAINS -->
+  <!-- ================================================================================== -->
+
+  <!-- Package 1: Unified Inbox & Navigation -->
+  <rect x="385" y="175" width="410" height="340" class="group-box" />
+  <text x="405" y="202" class="package-title">Unified Inbox Workspace</text>
+
+  <!-- Package 2: Conversation Context & Inspection -->
+  <rect x="385" y="535" width="410" height="425" class="group-box" />
+  <text x="405" y="562" class="package-title">Conversation Context &amp; Intelligence</text>
+
+  <!-- Package 3: Conversation Management & Curation -->
+  <rect x="385" y="980" width="410" height="295" class="group-box" />
+  <text x="405" y="1007" class="package-title">Conversation Curation &amp; Lifecycle</text>
+
+  <!-- Package 4: AI Assistance & Human-in-the-Loop -->
+  <rect x="825" y="175" width="470" height="850" class="group-box" />
+  <text x="845" y="202" class="package-title">AI Assistance &amp; Human-in-the-Loop Decision</text>
+
+  <!-- Package 5: External Channel Ingestion & Delivery -->
+  <rect x="1325" y="175" width="390" height="850" class="group-box" />
+  <text x="1345" y="202" class="package-title">Channel Ingestion &amp; Dispatch</text>
+
+  <!-- Package 6: Outbound Delivery & Sync -->
+  <rect x="825" y="1045" width="890" height="230" class="group-box" />
+  <text x="845" y="1072" class="package-title">Response Delivery &amp; Resolution Cycle</text>
+
+
+  <!-- ================================================================================== -->
+  <!-- USE CASE OVALS -->
+  <!-- ================================================================================== -->
+
+  <!-- 1. Inbox Workspace -->
+  <!-- UC: Access Unified Inbox -->
+  <g id="UC_ACCESS_INBOX">
+    <ellipse cx="585" cy="245" rx="140" ry="30" class="uc-oval" />
+    <text x="585" y="250" class="usecase-text">Access Unified Inbox</text>
+  </g>
+
+  <!-- UC: View Conversations -->
+  <g id="UC_VIEW_CONVS">
+    <ellipse cx="585" cy="335" rx="140" ry="30" class="uc-oval" />
+    <text x="585" y="340" class="usecase-text">View Conversations</text>
+  </g>
+
+  <!-- UC: Search / Filter Conversations -->
+  <g id="UC_FILTER_SEARCH">
+    <ellipse cx="585" cy="425" rx="150" ry="32" class="uc-oval" />
+    <text x="585" y="423" class="usecase-text">Search / Filter Conversations</text>
+    <text x="585" y="439" class="usecase-sub">(by keyword, channel tab)</text>
+  </g>
+
+  <!-- UC: Select Conversation -->
+  <g id="UC_SELECT_CONV">
+    <ellipse cx="585" cy="605" rx="140" ry="30" class="uc-oval" />
+    <text x="585" y="610" class="usecase-text">Select Conversation</text>
+  </g>
+
+  <!-- 2. Context & Intelligence -->
+  <!-- UC: View Conversation History -->
+  <g id="UC_VIEW_HISTORY">
+    <ellipse cx="585" cy="685" rx="150" ry="30" class="uc-oval" />
+    <text x="585" y="683" class="usecase-text">View Conversation History</text>
+    <text x="585" y="699" class="usecase-sub">(message timeline, timestamps, roles)</text>
+  </g>
+
+  <!-- UC: View Customer Details -->
+  <g id="UC_VIEW_CUSTOMER">
+    <ellipse cx="585" cy="760" rx="145" ry="30" class="uc-oval" />
+    <text x="585" y="758" class="usecase-text">View Customer Details</text>
+    <text x="585" y="774" class="usecase-sub">(profile, identity, linked accounts)</text>
+  </g>
+
+  <!-- UC: View Channel Information -->
+  <g id="UC_VIEW_CHANNEL">
+    <ellipse cx="585" cy="830" rx="140" ry="28" class="uc-oval" />
+    <text x="585" y="835" class="usecase-text">View Channel Information</text>
+  </g>
+
+  <!-- UC: View Sentiment -->
+  <g id="UC_VIEW_SENTIMENT">
+    <ellipse cx="495" cy="900" rx="95" ry="28" class="uc-oval" />
+    <text x="495" y="898" class="usecase-text">View Sentiment</text>
+    <text x="495" y="913" class="usecase-sub">(BERT analyzed)</text>
+  </g>
+
+  <!-- UC: View Priority / Attention Info -->
+  <g id="UC_VIEW_PRIORITY">
+    <ellipse cx="685" cy="900" rx="95" ry="28" class="uc-oval" />
+    <text x="685" y="898" class="usecase-text">View Priority Info</text>
+    <text x="685" y="913" class="usecase-sub">(unread &amp; alert)</text>
+  </g>
+
+  <!-- 3. Conversation Management & Curation -->
+  <!-- UC: Update Conversation Status -->
+  <g id="UC_UPDATE_STATUS">
+    <ellipse cx="585" cy="1050" rx="150" ry="30" class="uc-oval" />
+    <text x="585" y="1048" class="usecase-text">Update Conversation Status</text>
+    <text x="585" y="1064" class="usecase-sub">(Open, Pending, Resolved, Closed)</text>
+  </g>
+
+  <!-- UC: Update Conversation Priority -->
+  <g id="UC_UPDATE_PRIORITY">
+    <ellipse cx="585" cy="1125" rx="150" ry="30" class="uc-oval" />
+    <text x="585" y="1123" class="usecase-text">Update Conversation Priority</text>
+    <text x="585" y="1139" class="usecase-sub">(Low, Medium, High, Urgent)</text>
+  </g>
+
+  <!-- UC: Maintain Customer Notes -->
+  <g id="UC_MANAGE_NOTES">
+    <ellipse cx="585" cy="1195" rx="145" ry="28" class="uc-oval" />
+    <text x="585" y="1200" class="usecase-text">Maintain Customer Notes</text>
+  </g>
+
+  <!-- UC: Delete / Restore Conversation -->
+  <g id="UC_MANAGE_LIFECYCLE">
+    <ellipse cx="585" cy="1255" rx="150" ry="28" class="uc-oval" />
+    <text x="585" y="1253" class="usecase-text">Delete / Restore Conversation</text>
+    <text x="585" y="1268" class="usecase-sub">(Admin Restricted)</text>
+  </g>
+
+
+  <!-- 4. AI Assistance & Human-in-the-Loop (Center-Right) -->
+  <!-- UC: Generate AI-Assisted Response -->
+  <g id="UC_GEN_AI">
+    <ellipse cx="1060" cy="265" rx="175" ry="35" class="uc-oval" />
+    <text x="1060" y="262" class="usecase-text">Generate AI-Assisted Response</text>
+    <text x="1060" y="279" class="usecase-sub">(RAG retrieval + context synthesis)</text>
+  </g>
+
+  <!-- UC: Review AI Draft -->
+  <g id="UC_REVIEW_AI">
+    <ellipse cx="1060" cy="405" rx="160" ry="32" class="uc-oval" />
+    <text x="1060" y="402" class="usecase-text">Review AI Draft</text>
+    <text x="1060" y="419" class="usecase-sub">(inspect grounded suggestion)</text>
+  </g>
+
+  <!-- UC: Accept / Edit / Reject AI Draft -->
+  <g id="UC_DECIDE_AI">
+    <ellipse cx="1060" cy="545" rx="170" ry="34" class="uc-oval" />
+    <text x="1060" y="542" class="usecase-text">Accept / Edit / Reject AI Draft</text>
+    <text x="1060" y="559" class="usecase-sub">(Human Decision Point)</text>
+  </g>
+
+  <!-- UC: Write Manual Response -->
+  <g id="UC_MANUAL_RESP">
+    <ellipse cx="1060" cy="685" rx="170" ry="34" class="uc-oval" />
+    <text x="1060" y="682" class="usecase-text">Write Manual Response</text>
+    <text x="1060" y="699" class="usecase-sub">(composer, attachment, voice)</text>
+  </g>
+
+  <!-- UC: Send Customer Response -->
+  <g id="UC_SEND_RESP">
+    <ellipse cx="1060" cy="825" rx="165" ry="35" class="uc-oval" />
+    <text x="1060" y="822" class="usecase-text">Send Customer Response</text>
+    <text x="1060" y="839" class="usecase-sub">(Human Approved Dispatch)</text>
+  </g>
+
+
+  <!-- 5. Channel Ingestion & Dispatch (Rightmost inside boundary) -->
+  <!-- UC: Deliver Incoming Message -->
+  <g id="UC_DELIVER_IN">
+    <ellipse cx="1520" cy="265" rx="160" ry="34" class="uc-oval" />
+    <text x="1520" y="262" class="usecase-text">Deliver Incoming Message</text>
+    <text x="1520" y="279" class="usecase-sub">(Webhook ingestion &amp; routing)</text>
+  </g>
+
+  <!-- UC: Automatically Dispatch AI Response -->
+  <g id="UC_AUTO_DISPATCH">
+    <ellipse cx="1520" cy="460" rx="165" ry="34" class="uc-oval" />
+    <text x="1520" y="457" class="usecase-text">Automatically Dispatch AI Reply</text>
+    <text x="1520" y="474" class="usecase-sub">(Auto AI Mode bypass)</text>
+  </g>
+
+  <!-- UC: Deliver Outgoing Response -->
+  <g id="UC_DELIVER_OUT">
+    <ellipse cx="1520" cy="825" rx="160" ry="34" class="uc-oval" />
+    <text x="1520" y="822" class="usecase-text">Deliver Outgoing Response</text>
+    <text x="1520" y="839" class="usecase-sub">(Channel API / SMTP Dispatch)</text>
+  </g>
+
+
+  <!-- ================================================================================== -->
+  <!-- EXTERNAL USE CASES (Outside system boundary for customer) -->
+  <!-- ================================================================================== -->
+  <g id="UC_SEND_MSG">
+    <ellipse cx="1940" cy="265" rx="145" ry="32" class="uc-oval" />
+    <text x="1940" y="262" class="usecase-text">Send Message to Business</text>
+    <text x="1940" y="278" class="usecase-sub">(via active channel)</text>
+  </g>
+
+  <g id="UC_RECV_RESP">
+    <ellipse cx="1940" cy="825" rx="145" ry="32" class="uc-oval" />
+    <text x="1940" y="822" class="usecase-text">Receive Business Response</text>
+    <text x="1940" y="838" class="usecase-sub">(in customer thread)</text>
+  </g>
+
+
+  <!-- ================================================================================== -->
+  <!-- ACTORS (Left: Internal Users, Right: External Entities) -->
+  <!-- ================================================================================== -->
+
+  <!-- Actor 1: Support Staff -->
+  <g id="ACTOR_STAFF" transform="translate(180, 430)">
+    <!-- Stick Figure -->
+    <circle cx="0" cy="-35" r="16" fill="#ffffff" stroke="#000000" stroke-width="2" />
+    <line x1="0" y1="-19" x2="0" y2="25" stroke="#000000" stroke-width="2.2" />
+    <line x1="-28" y1="-5" x2="28" y2="-5" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="-22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <text x="0" y="90" class="actor-label">Support Staff</text>
+    <text x="0" y="108" class="actor-sub">&lt;&lt;actor&gt;&gt; / Agent</text>
+  </g>
+
+  <!-- Actor 2: Business Admin (Generalizes Support Staff) -->
+  <g id="ACTOR_ADMIN" transform="translate(180, 1140)">
+    <!-- Stick Figure -->
+    <circle cx="0" cy="-35" r="16" fill="#ffffff" stroke="#000000" stroke-width="2" />
+    <line x1="0" y1="-19" x2="0" y2="25" stroke="#000000" stroke-width="2.2" />
+    <line x1="-28" y1="-5" x2="28" y2="-5" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="-22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <text x="0" y="90" class="actor-label">Business Admin</text>
+    <text x="0" y="108" class="actor-sub">&lt;&lt;actor&gt;&gt; / Manager</text>
+  </g>
+
+  <!-- Actor Generalization Line: Business Admin -> Support Staff -->
+  <line x1="180" y1="1080" x2="180" y2="560" class="gen-line" />
+  <rect x="125" y="795" width="110" height="22" fill="#ffffff" stroke="#888888" stroke-width="0.8" rx="4" />
+  <text x="180" y="810" font-size="11" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;generalizes&gt;&gt;</text>
+
+  <!-- Actor 3: Customer / End User (External, Far Right) -->
+  <g id="ACTOR_CUSTOMER" transform="translate(2020, 545)">
+    <!-- Stick Figure -->
+    <circle cx="0" cy="-35" r="16" fill="#ffffff" stroke="#000000" stroke-width="2" />
+    <line x1="0" y1="-19" x2="0" y2="25" stroke="#000000" stroke-width="2.2" />
+    <line x1="-28" y1="-5" x2="28" y2="-5" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="-22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <line x1="0" y1="25" x2="22" y2="65" stroke="#000000" stroke-width="2.2" />
+    <text x="0" y="90" class="actor-label">Customer / End User</text>
+    <text x="0" y="108" class="actor-sub">&lt;&lt;external actor&gt;&gt;</text>
+  </g>
+
+  <!-- Actor 4: Communication Platform (Generic External Service) -->
+  <g id="ACTOR_PLATFORM" transform="translate(1520, 1140)">
+    <!-- Box style / External System Actor -->
+    <rect x="-110" y="-35" width="220" height="70" rx="8" fill="#ffffff" stroke="#000000" stroke-width="2" />
+    <text x="0" y="-12" class="actor-sub">&lt;&lt;external service&gt;&gt;</text>
+    <text x="0" y="10" class="actor-label">Communication Platform</text>
+    <text x="0" y="26" font-size="11" fill="#555555" text-anchor="middle">(Generic Channel Provider)</text>
+  </g>
+
+
+  <!-- ================================================================================== -->
+  <!-- ASSOCIATIONS (Actor to Use Case lines) -->
+  <!-- ================================================================================== -->
+
+  <!-- Support Staff Associations -->
+  <line x1="215" y1="420" x2="445" y2="255" class="assoc-line" /> <!-- to Access Unified Inbox -->
+  <line x1="215" y1="440" x2="445" y2="605" class="assoc-line" /> <!-- to Select Conversation -->
+  <line x1="215" y1="460" x2="895" y2="410" class="assoc-line" /> <!-- to Review AI Draft -->
+  <line x1="215" y1="480" x2="890" y2="545" class="assoc-line" /> <!-- to Accept/Edit/Reject -->
+  <line x1="215" y1="500" x2="890" y2="685" class="assoc-line" /> <!-- to Write Manual Response -->
+  <line x1="215" y1="520" x2="895" y2="825" class="assoc-line" /> <!-- to Send Customer Response -->
+  <line x1="215" y1="535" x2="440" y2="1050" class="assoc-line" /> <!-- to Update Status -->
+  <line x1="215" y1="545" x2="440" y2="1125" class="assoc-line" /> <!-- to Update Priority -->
+  <line x1="215" y1="555" x2="440" y2="1195" class="assoc-line" /> <!-- to Maintain Notes -->
+
+  <!-- Business Admin Specific Association -->
+  <line x1="215" y1="1170" x2="435" y2="1255" class="assoc-line" /> <!-- to Delete/Restore Conversation -->
+
+  <!-- Customer Associations -->
+  <line x1="1980" y1="500" x2="1940" y2="300" class="assoc-line" /> <!-- Customer -> Send Message -->
+  <line x1="1980" y1="590" x2="1940" y2="790" class="assoc-line" /> <!-- Customer -> Receive Response -->
+
+  <!-- Communication Platform Associations -->
+  <line x1="1520" y1="1105" x2="1520" y2="300" class="assoc-line" /> <!-- Platform -> Deliver Incoming -->
+  <line x1="1520" y1="1105" x2="1520" y2="860" class="assoc-line" /> <!-- Platform -> Deliver Outgoing -->
+
+
+  <!-- ================================================================================== -->
+  <!-- UML INCLUDE & EXTEND RELATIONSHIPS -->
+  <!-- ================================================================================== -->
+
+  <!-- Inbound Message Flow -->
+  <!-- Send Message <<include>> Deliver Incoming Message -->
+  <line x1="1795" y1="265" x2="1680" y2="265" class="dep-line" />
+  <rect x="1705" y="248" width="70" height="18" fill="#ffffff" />
+  <text x="1740" y="261" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Deliver Incoming <<include>> View Conversations (Updates Unified Feed) -->
+  <path d="M 1430 240 Q 1000 130 725 330" class="dep-line" />
+  <rect x="1030" y="148" width="70" height="18" fill="#ffffff" />
+  <text x="1065" y="161" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Deliver Incoming <<include>> Generate AI-Assisted Response (Triggers RAG draft) -->
+  <line x1="1360" y1="265" x2="1235" y2="265" class="dep-line" />
+  <rect x="1265" y="248" width="70" height="18" fill="#ffffff" />
+  <text x="1300" y="261" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Inbox Navigation Relationships -->
+  <!-- Access Unified Inbox <<include>> View Conversations -->
+  <line x1="585" y1="275" x2="585" y2="305" class="dep-line" />
+  <rect x="550" y="282" width="70" height="16" fill="#ffffff" />
+  <text x="585" y="294" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Search/Filter <<extend>> View Conversations -->
+  <line x1="585" y1="393" x2="585" y2="365" class="dep-line" />
+  <rect x="550" y="372" width="70" height="16" fill="#ffffff" />
+  <text x="585" y="384" class="rel-text">&lt;&lt;extend&gt;&gt;</text>
+
+  <!-- Select Conversation Includes Context -->
+  <!-- Select Conversation <<include>> View History -->
+  <line x1="585" y1="635" x2="585" y2="655" class="dep-line" />
+  <rect x="552" y="638" width="66" height="14" fill="#ffffff" />
+  <text x="585" y="649" font-size="10.5" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Select Conversation <<include>> View Customer Details -->
+  <path d="M 500 630 Q 420 700 480 750" class="dep-line" />
+  <rect x="420" y="692" width="66" height="14" fill="#ffffff" />
+  <text x="453" y="703" font-size="10.5" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Select Conversation <<include>> View Channel Information -->
+  <path d="M 670 630 Q 750 730 670 820" class="dep-line" />
+  <rect x="700" y="728" width="66" height="14" fill="#ffffff" />
+  <text x="733" y="739" font-size="10.5" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Select Conversation <<include>> View Sentiment -->
+  <path d="M 520 632 Q 400 770 470 875" class="dep-line" />
+  <rect x="420" y="800" width="66" height="14" fill="#ffffff" />
+  <text x="453" y="811" font-size="10.5" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Select Conversation <<include>> View Priority Info -->
+  <path d="M 650 632 Q 770 770 700 875" class="dep-line" />
+  <rect x="710" y="800" width="66" height="14" fill="#ffffff" />
+  <text x="743" y="811" font-size="10.5" font-weight="bold" fill="#000000" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+
+  <!-- ================================================================================== -->
+  <!-- HUMAN-IN-THE-LOOP CORE LOGIC (AI -> Review -> Decision -> Send) -->
+  <!-- ================================================================================== -->
+
+  <!-- Review AI Draft <<extend>> Generate AI Response [Review Mode] -->
+  <line x1="1060" y1="373" x2="1060" y2="300" class="dep-line" />
+  <rect x="990" y="325" width="140" height="28" fill="#ffffff" stroke="#888888" stroke-width="0.8" rx="4" />
+  <text x="1060" y="338" class="rel-text">&lt;&lt;extend&gt;&gt;</text>
+  <text x="1060" y="350" class="condition-text">[Review Mode active]</text>
+
+  <!-- Accept/Edit/Reject <<include>> Review AI Draft -->
+  <line x1="1060" y1="511" x2="1060" y2="437" class="dep-line" />
+  <rect x="1025" y="468" width="70" height="16" fill="#ffffff" />
+  <text x="1060" y="480" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Accept/Edit/Reject <<extend>> Send Customer Response -->
+  <line x1="1060" y1="579" x2="1060" y2="790" class="dep-line" />
+  <rect x="980" y="625" width="160" height="28" fill="#ffffff" stroke="#888888" stroke-width="0.8" rx="4" />
+  <text x="1060" y="638" class="rel-text">&lt;&lt;extend&gt;&gt;</text>
+  <text x="1060" y="650" class="condition-text">[Accepted / Edited Draft]</text>
+
+  <!-- Write Manual Response <<extend>> Send Customer Response -->
+  <line x1="1060" y1="719" x2="1060" y2="790" class="dep-line" />
+  <rect x="985" y="742" width="150" height="26" fill="#ffffff" stroke="#888888" stroke-width="0.8" rx="4" />
+  <text x="1060" y="754" class="rel-text">&lt;&lt;extend&gt;&gt;</text>
+  <text x="1060" y="765" class="condition-text">[Manual Composition]</text>
+
+  <!-- Auto AI Mode Bypass: Automatically Dispatch <<extend>> Generate AI [Auto Mode] -->
+  <path d="M 1520 426 Q 1520 310 1235 270" class="dep-line" />
+  <rect x="1350" y="325" width="140" height="28" fill="#ffffff" stroke="#888888" stroke-width="0.8" rx="4" />
+  <text x="1420" y="338" class="rel-text">&lt;&lt;extend&gt;&gt;</text>
+  <text x="1420" y="350" class="condition-text">[Auto AI Mode active]</text>
+
+  <!-- Automatically Dispatch <<include>> Deliver Outgoing Response -->
+  <line x1="1520" y1="494" x2="1520" y2="791" class="dep-line" />
+  <rect x="1485" y="635" width="70" height="18" fill="#ffffff" />
+  <text x="1520" y="648" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+
+  <!-- Outbound Delivery Flow -->
+  <!-- Send Customer Response <<include>> Deliver Outgoing Response -->
+  <line x1="1225" y1="825" x2="1360" y2="825" class="dep-line" />
+  <rect x="1265" y="808" width="70" height="18" fill="#ffffff" />
+  <text x="1300" y="821" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Deliver Outgoing Response <<include>> Receive Business Response -->
+  <line x1="1680" y1="825" x2="1795" y2="825" class="dep-line" />
+  <rect x="1705" y="808" width="70" height="18" fill="#ffffff" />
+  <text x="1740" y="821" class="rel-text">&lt;&lt;include&gt;&gt;</text>
+
+
+  <!-- ================================================================================== -->
+  <!-- WORKFLOW HIGHLIGHT NOTE: HUMAN-IN-THE-LOOP PRINCIPLE -->
+  <!-- ================================================================================== -->
+  <g transform="translate(860, 1100)">
+    <rect x="0" y="0" width="820" height="145" class="legend-box" />
+    <text x="25" y="28" font-size="13" font-weight="bold" fill="#000000">Human-in-the-Loop Workflow Guarantee &amp; Omnichannel Architecture:</text>
+    
+    <text x="25" y="52" font-size="12" fill="#222222">
+      1. <tspan font-weight="bold">Inbound Channel Message:</tspan> External Customer messages (Messenger, IG, WhatsApp, Email) are delivered via generic Communication Platform.
+    </text>
+    <text x="25" y="72" font-size="12" fill="#222222">
+      2. <tspan font-weight="bold">AI Grounded Drafting:</tspan> System analyzes message sentiment, retrieves tenant-scoped knowledge, and generates an AI draft reply.
+    </text>
+    <text x="25" y="92" font-size="12" fill="#222222">
+      3. <tspan font-weight="bold">Human Oversight (Default):</tspan> Support Staff/Admin reviews the AI draft, with full power to <tspan font-weight="bold">Accept</tspan>, <tspan font-weight="bold">Edit</tspan>, or <tspan font-weight="bold">Reject</tspan> the suggestion.
+    </text>
+    <text x="25" y="112" font-size="12" fill="#222222">
+      4. <tspan font-weight="bold">Controlled Outbound Delivery:</tspan> Only human-approved or manually written responses are dispatched back through the original channel.
+    </text>
+    <text x="25" y="132" font-size="11.5" fill="#555555" font-style="italic">
+      * Note: Business Admin can optionally configure Auto AI Mode to bypass manual review for instant automated replies.
+    </text>
+  </g>
+
+  <!-- ================================================================================== -->
+  <!-- UML NOTATION LEGEND (Bottom Left) -->
+  <!-- ================================================================================== -->
+  <g transform="translate(385, 1285)">
+    <text x="0" y="0" font-size="11" font-weight="bold" fill="#444444">UML 2.5 Notation:  —— Association   - - - &gt; &lt;&lt;include&gt;&gt; / &lt;&lt;extend&gt;&gt; Dependency   ———▷ Generalization   ( ) Use Case</text>
+  </g>
+
+</svg>
+"""
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+diagram_dir = os.path.join(project_root, "docs", "diagrams", "use-case")
+os.makedirs(diagram_dir, exist_ok=True)
+svg_path = os.path.join(diagram_dir, "haqdesk_unified_inbox_use_case.svg")
+png_path = os.path.join(diagram_dir, "haqdesk_unified_inbox_use_case.png")
+
+with open(svg_path, "w", encoding="utf-8") as f:
+    f.write(svg_code)
+
+print(f"Saved SVG to {svg_path}")
+
+# Render high-resolution PNG using PyMuPDF (fitz)
+doc = fitz.open(svg_path)
+pix = doc[0].get_pixmap(dpi=300)
+pix.save(png_path)
+print(f"Rendered High-Res PNG to {png_path} ({pix.width}x{pix.height}px)")

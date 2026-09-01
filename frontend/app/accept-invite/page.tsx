@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, UserPlus, Shield, Loader2 } from "lucide-react";
 import PasswordField from "@/components/ui/PasswordField";
+import ThemeLogo from "@/components/ui/ThemeLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -144,11 +145,7 @@ function AcceptInviteContent() {
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 z-10">
                     <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0 transition-transform hover:scale-105">
-                        <img
-                            src="/images/HaqDesk.png"
-                            alt="HaqDesk AI"
-                            className="w-full h-full object-contain"
-                        />
+                        <ThemeLogo width={36} height={36} alt="HaqDesk AI" className="w-full h-full object-contain" />
                     </div>
                     <span className="text-foreground font-bold text-[16px] tracking-tight">
                         HaqDesk<span className="text-accent-glow"> AI</span>

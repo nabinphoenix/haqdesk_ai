@@ -1,0 +1,94 @@
+%% Verified implementation scope. Rendered final is the companion SVG/PNG.
+flowchart LR
+    BA((Business Admin))
+
+    subgraph HD[HaqDesk AI – Business Administration]
+        direction TB
+
+        subgraph AUTH[Authentication and Business Account]
+            direction LR
+            REGISTER([Register Business])
+            LOGIN([Login / Logout])
+            PROFILE([Manage Business Profile])
+            SETTINGS([Manage Settings])
+        end
+
+        subgraph STAFF[Staff Management]
+            direction LR
+            VIEW_STAFF([View Staff & Presence])
+            INVITE([Invite Staff])
+            ROLE([Assign Role during Invitation])
+            REMOVE([Remove Staff])
+        end
+
+        subgraph INTEGRATIONS[Communication Integrations]
+            direction LR
+            ACCESS_INT([Access Integration Settings])
+            STATUS([View Integration Status])
+            META([Connect Meta Channels])
+            GMAIL([Connect Gmail])
+            UPDATE_INT([Update / Reconnect Integration])
+        end
+
+        subgraph KB[Knowledge Base]
+            direction LR
+            ACCESS_KB([Access Knowledge Base])
+            DOC_STATUS([View Documents & Processing Status])
+            UPLOAD([Upload Documents])
+            SEARCH([Search Knowledge])
+            UPDATE_DOC([Update / Re-index Document Content])
+            DELETE_DOC([Delete Document])
+        end
+
+        subgraph SUPPORT[Customer Support]
+            direction LR
+            INBOX([Access Unified Inbox])
+            CONVERSATIONS([View Customer Conversations])
+            CUSTOMER([View Customer Information])
+            AI([Generate AI-Assisted Response])
+            REVIEW([Review / Edit / Dismiss AI Draft])
+            MANUAL([Write Manual Response])
+            SEND([Send Customer Response])
+        end
+
+        subgraph INSIGHT[Analytics and Collaboration]
+            direction LR
+            ANALYTICS([View Analytics & Export Reports])
+            CHAT([Internal Chat])
+        end
+    end
+
+    BA --- REGISTER
+    BA --- LOGIN
+    BA --- PROFILE
+    BA --- SETTINGS
+    BA --- VIEW_STAFF
+    BA --- ACCESS_INT
+    BA --- ACCESS_KB
+    BA --- INBOX
+    BA --- ANALYTICS
+    BA --- CHAT
+
+    INVITE -. "<<include>>" .-> ROLE
+    INVITE -. "<<extend>>" .-> VIEW_STAFF
+    REMOVE -. "<<extend>>" .-> VIEW_STAFF
+    ACCESS_INT -. "<<include>>" .-> STATUS
+    META -. "<<extend>>" .-> ACCESS_INT
+    GMAIL -. "<<extend>>" .-> ACCESS_INT
+    UPDATE_INT -. "<<extend>>" .-> ACCESS_INT
+    ACCESS_KB -. "<<include>>" .-> DOC_STATUS
+    UPLOAD -. "<<extend>>" .-> ACCESS_KB
+    SEARCH -. "<<extend>>" .-> ACCESS_KB
+    UPDATE_DOC -. "<<extend>>" .-> ACCESS_KB
+    DELETE_DOC -. "<<extend>>" .-> ACCESS_KB
+    INBOX -. "<<include>>" .-> CONVERSATIONS
+    CUSTOMER -. "<<extend>>" .-> CONVERSATIONS
+    AI -. "<<extend>>" .-> CONVERSATIONS
+    REVIEW -. "<<extend>>" .-> AI
+    MANUAL -. "<<extend>>" .-> SEND
+    SEND -. "<<extend>>" .-> INBOX
+
+    classDef actor fill:#fff,stroke:#111,stroke-width:2px,color:#111;
+    classDef usecase fill:#fff,stroke:#111,stroke-width:1.5px,color:#111;
+    class BA actor;
+    class REGISTER,LOGIN,PROFILE,SETTINGS,VIEW_STAFF,INVITE,ROLE,REMOVE,ACCESS_INT,STATUS,META,GMAIL,UPDATE_INT,ACCESS_KB,DOC_STATUS,UPLOAD,SEARCH,UPDATE_DOC,DELETE_DOC,INBOX,CONVERSATIONS,CUSTOMER,AI,REVIEW,MANUAL,SEND,ANALYTICS,CHAT usecase;

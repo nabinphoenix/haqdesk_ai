@@ -20,6 +20,7 @@ starlette
 # AI / RAG pipeline
 sentence-transformers
 litellm
+python-docx
 pymupdf
 langdetect
 qdrant-client

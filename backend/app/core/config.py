@@ -35,15 +35,15 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
 
     # AI Centralized Settings
-    LLM_PRIMARY_MODEL: str = "groq/llama-3.3-70b-versatile"
-    LLM_FALLBACK_MODELS: str = "gemini/gemini-2.0-flash,openrouter/meta-llama/llama-3.1-70b-instruct"
+    LLM_PRIMARY_MODEL: str = "groq/qwen/qwen3.6-27b"
+    LLM_FALLBACK_MODELS: str = "gemini/gemini-2.0-flash,groq/openai/gpt-oss-120b"
     LLM_TIMEOUT_SECONDS: int = 45
     LLM_MAX_RETRIES_PER_MODEL: int = 1
     LLM_FALLBACK_ENABLED: bool = True
 
     # Embedding Model
-    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-small"
-    EMBEDDING_DIM: int = 384
+    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-large"
+    EMBEDDING_DIM: int = 1024
 
     # Ollama (local LLM server for models like gemma3:1b)
     OLLAMA_API_BASE: str = "http://localhost:11434"
@@ -52,11 +52,22 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
+    HF_TOKEN: Optional[str] = None
 
     VECTOR_DB_PATH: str = "./vector_db"
     KNOWLEDGE_UPLOAD_ROOT: str = "uploads/knowledge"
 
     # Qdrant Vector Database
+    KNOWLEDGE_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
+    KNOWLEDGE_MAX_DOCUMENTS: int = 100
+    KNOWLEDGE_MAX_STORAGE_BYTES: int = 1024 * 1024 * 1024
+    KNOWLEDGE_MAX_EXTRACTED_CHARACTERS: int = 5_000_000
+    KNOWLEDGE_INGESTION_MAX_ATTEMPTS: int = 3
+    KNOWLEDGE_INGESTION_WORKER_ENABLED: bool = True
+    KNOWLEDGE_INGESTION_POLL_SECONDS: float = 2.0
+    KNOWLEDGE_INGESTION_STALE_SECONDS: int = 900
+    # Set false in production so an unavailable shared Qdrant fails clearly.
+    QDRANT_ALLOW_LOCAL_FALLBACK: bool = False
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_COLLECTION_PREFIX: str = "haqdesk_business"

@@ -734,6 +734,7 @@ export default function ChatWindow({
                                 <MessageBubble
                                     {...msg}
                                     agentInitials={agentInitials}
+                                    showAiReply={aiMode === "auto" && msg.sender === "ai"}
                                     onUseDraft={(draft) => {
                                         setInput(draft);
                                         setIsAiAssistedReply(true);
@@ -751,8 +752,10 @@ export default function ChatWindow({
                 {aiSuggestion && !aiDismissed && (
                     <AISuggestionBox
                         suggestion={aiSuggestion.content}
-                        sources={["Knowledge Base"]}
-                        confidence={0.92}
+                        sources={Array.isArray(aiSuggestion.ai_metadata?.sources) ? aiSuggestion.ai_metadata.sources : []}
+                        confidence={Number(aiSuggestion.ai_metadata?.confidence ?? 0)}
+                        grounded={Boolean(aiSuggestion.ai_metadata?.grounded)}
+                        sourceDetails={Array.isArray(aiSuggestion.ai_metadata?.source_details) ? aiSuggestion.ai_metadata.source_details : []}
                         onAccept={() => { setInput(aiSuggestion.content); setIsAiAssistedReply(true); setAiDismissed(true); }}
                         onEdit={() => {
                             setInput(aiSuggestion.content);

@@ -12,12 +12,13 @@ export default function AnalyticsPageHeader({ generatedAt, refreshing, exporting
   return <header className="page-header">
     <div className="page-header-row">
       <div>
-        <h1 className="font-heading text-4xl font-black tracking-tighter text-foreground sm:text-5xl">Analytics</h1>
-        <p className="mt-2 text-sm font-medium text-muted-foreground">Understand conversation activity, channels, customers, and support workload.</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-accent-glow">Decision workspace</p>
+        <h1 className="mt-2 font-heading text-4xl font-black tracking-tighter text-foreground sm:text-5xl">Support analytics</h1>
+        <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-muted-foreground">See demand, workload, customer risk, and channel performance in one calm, decision-ready view.</p>
         {generatedAt && <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Updated {new Date(generatedAt).toLocaleString()}</p>}
       </div>
       <div className="flex flex-col items-end gap-2">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button type="button" onClick={() => onExport("csv")} disabled={Boolean(exporting) || exportDisabled} className="ds-button ds-button-secondary">
             <Download size={14} /> {exporting === "csv" ? "Exporting..." : "Export CSV"}
           </button>

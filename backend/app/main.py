@@ -7,6 +7,7 @@ from app.routers import auth, integrations, inbox, customers, knowledge, whatsap
 import threading
 import time
 from app.services.email_poller import run_email_poll
+from app.services.knowledge_ingestion import start_knowledge_ingestion_worker
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -89,9 +90,32 @@ async def startup_event():
         connection.execute(text(
             "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS storage_path VARCHAR"
         ))
+        for column_sql in (
+            'source_type VARCHAR',
+            'file_size INTEGER DEFAULT 0',
+            'checksum VARCHAR(64)',
+            'processing_error TEXT',
+            'processing_started_at TIMESTAMP',
+            'processed_at TIMESTAMP',
+            'ingestion_attempts INTEGER DEFAULT 0',
+        ):
+            connection.execute(text(
+                f'ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS {column_sql}'
+            ))
+        connection.execute(text("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN"))
+        connection.execute(text("UPDATE knowledge_documents SET source_type = 'upload' WHERE source_type IS NULL"))
     from app.models.internal_messaging import InternalThread, InternalThreadParticipant, InternalMessage
+    from app.models.faq_opportunity import FAQOpportunityFeedback
+    from app.models.knowledge import KnowledgeIngestionJob, AgentReplyFeedback
     from app.core.database import Base
-    Base.metadata.create_all(bind=engine, tables=[InternalThread.__table__, InternalThreadParticipant.__table__, InternalMessage.__table__])
+    Base.metadata.create_all(bind=engine, tables=[InternalThread.__table__, InternalThreadParticipant.__table__, InternalMessage.__table__, FAQOpportunityFeedback.__table__, KnowledgeIngestionJob.__table__, AgentReplyFeedback.__table__])
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE agent_reply_feedback ADD COLUMN IF NOT EXISTS knowledge_document_id INTEGER"))
+    # Re-queue legacy processing documents so failed uploads are recoverable.
+    with engine.begin() as connection:
+        connection.execute(text("INSERT INTO knowledge_ingestion_jobs (document_id, business_id, status, attempts, available_at, created_at) SELECT d.id, d.business_id, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM knowledge_documents d WHERE d.status = 'processing' AND d.storage_path IS NOT NULL AND NOT EXISTS (SELECT 1 FROM knowledge_ingestion_jobs j WHERE j.document_id = d.id)"))
+        connection.execute(text("UPDATE knowledge_documents SET status = 'failed', processing_error = 'No stored file is available for ingestion.' WHERE status = 'processing' AND storage_path IS NULL"))
+    start_knowledge_ingestion_worker()
     start_email_polling()
 
 if __name__ == "__main__":

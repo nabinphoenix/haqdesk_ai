@@ -15,6 +15,7 @@ interface MessageBubbleProps {
     ai_metadata?: any;
     onUseDraft?: (draft: string) => void;
     isVoice?: boolean;
+    showAiReply?: boolean;
     audioUrl?: string;
 }
 
@@ -31,11 +32,13 @@ export default function MessageBubble({
     onUseDraft,
     isVoice,
     audioUrl,
+    showAiReply = false,
 }: MessageBubbleProps) {
     // AI messages are shown only via AISuggestionBox — suppress here
-    if (sender === "ai") return null;
+    if (sender === "ai" && !showAiReply) return null;
 
     const isCustomer = sender === "customer";
+    const isAi = sender === "ai";
 
     const getFileUrl = (url: string) => {
         if (!url) return "";
@@ -131,6 +134,12 @@ export default function MessageBubble({
                         </div>
                     )}
 
+                    {isAi && (
+                        <div className="mb-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-white/80">
+                            <Bot size={11} />
+                            <span>AI Assistant</span>
+                        </div>
+                    )}
                     {/* Content */}
                     <div className="whitespace-pre-wrap">
                         {isVoiceMsg && voiceAudioUrl ? (
@@ -248,7 +257,7 @@ export default function MessageBubble({
                     className="w-7 h-7 rounded-xl shrink-0 flex items-center justify-center mb-0.5 text-foreground text-[9px] font-bold"
                     style={{ background: "linear-gradient(135deg, #6D4AE2, #8B5CF6)" }}
                 >
-                    {agentInitials}
+                    {isAi ? <Bot size={14} aria-label="AI Assistant" /> : agentInitials}
                 </div>
             )}
         </motion.div>

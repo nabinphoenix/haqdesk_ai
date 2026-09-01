@@ -26,6 +26,14 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 oauth_service = OAuthService()
 webhook_service = WebhookService()
 
+# Never return credentials or token-like metadata to workspace members. Channel
+# connections are managed by business admins; teammates only need the channel
+# name and status to do their work.
+_PRIVATE_INTEGRATION_KEYS = {
+    "access_token", "page_access_token", "refresh_token", "password",
+    "password_encrypted", "app_password", "client_secret", "token",
+}
+
 @router.get("")
 async def list_integrations(
     db: Session = Depends(get_db),
@@ -39,22 +47,26 @@ async def list_integrations(
         Integration.status == "active"
     ).all()
     
-    return {
-        "integrations": [
-            {
-                "platform": i.platform,
-                "status": i.status,
-                "created_at": i.created_at,
-                "page_id": i.page_id,
-                "page_name": i.page_name,
-                "metadata": {
-                    key: value
-                    for key, value in (i.metadata_json or {}).items()
-                    if key != "password_encrypted"
-                },
-            } for i in integrations
-        ]
-    }
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    can_view_connection_details = role in {"business_admin", "super_admin"}
+    visible_integrations = []
+    for integration in integrations:
+        item = {
+            "platform": integration.platform,
+            "status": integration.status,
+            "created_at": integration.created_at,
+            "page_name": integration.page_name,
+        }
+        if can_view_connection_details:
+            item["page_id"] = integration.page_id
+            item["metadata"] = {
+                key: value
+                for key, value in (integration.metadata_json or {}).items()
+                if key.lower() not in _PRIVATE_INTEGRATION_KEYS
+            }
+        visible_integrations.append(item)
+
+    return {"integrations": visible_integrations}
 
 
 class EmailIntegrationRequest(BaseModel):

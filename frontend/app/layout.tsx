@@ -17,6 +17,11 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "HaqDesk AI | Unified Customer Support",
   description: "Because every customer has a right (हक) to timely, accurate, and respectful support.",
+  icons: {
+    icon: "/images/Haqdesk_AI_Light.png",
+    shortcut: "/images/Haqdesk_AI_Light.png",
+    apple: "/images/Haqdesk_AI_Light.png",
+  },
 };
 
 import AppSidebar from "@/components/layout/AppSidebar";

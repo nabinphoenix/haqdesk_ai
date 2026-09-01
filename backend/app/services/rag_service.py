@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Optional, Literal
 from sentence_transformers import SentenceTransformer
@@ -26,6 +27,102 @@ EMBEDDING_DIM = settings.EMBEDDING_DIM
 CONFIDENCE_THRESHOLD = 0.45
 
 
+_OWNER_CONTACT_TERMS = (
+    "owner", "business owner", "malik", "malikko", "malik ko",
+)
+_CONTACT_TERMS = (
+    "contact", "contact detail", "phone", "number", "mobile", "email",
+    "sampark", "sampak", "bibaran", "detail",
+)
+_ROMANIZED_NEPALI_MARKERS = (
+    "hajur", "tapai", "tapailai", "malai", "hamro", "cha", "chha", "xa",
+    "xaina", "chaina", "garnu", "milxa", "bhayo", "ko", "yo", "thiyo",
+)
+
+
+def _is_private_owner_contact_request(text: str) -> bool:
+    """Identify requests for an owner's personal contact details."""
+    normalized = " ".join((text or "").lower().split())
+    return bool(
+        normalized
+        and any(term in normalized for term in _OWNER_CONTACT_TERMS)
+        and any(term in normalized for term in _CONTACT_TERMS)
+    )
+
+
+def _looks_romanized_nepali(text: str) -> bool:
+    tokens = set(re.findall(r"[a-z]+", (text or "").lower()))
+    return bool(tokens.intersection(_ROMANIZED_NEPALI_MARKERS))
+
+
+
+
+def private_owner_contact_response(question: str) -> str | None:
+    """Give a concise privacy-safe answer without inventing contact information."""
+    if not _is_private_owner_contact_request(question):
+        return None
+
+    if _looks_romanized_nepali(question):
+        return (
+            "Hello,\n\nHami byabasaya malikko byaktigat samparka bibaran share garna "
+            "sakdainau. Kripaya yahai message ma aafno prasna pathaunuhos; hamro support "
+            "teamle sahayog garchha."
+        )
+
+    return (
+        "Hello,\n\nWe cannot share the business owner's private contact details. "
+        "Please send your question here and the support team will help."
+    )
+
+
+
+_LEXICAL_STOP_WORDS = frozenset({
+    "a", "an", "the", "can", "could", "do", "does", "did", "is", "are", "am",
+    "was", "were", "what", "how", "why", "where", "when", "who", "which", "would",
+    "should", "may", "might", "i", "me", "my", "we", "us", "our", "you", "your",
+    "they", "them", "this", "that", "these", "those", "to", "of", "for", "on", "in",
+    "at", "from", "with", "through", "before", "after", "and", "or", "like", "please",
+    "tell", "want", "need", "guys", "text", "customer", "customers",
+})
+
+
+def _lexical_tokens(value: str) -> set[str]:
+    """Return small normalized keywords for a safe SQL retrieval fallback."""
+    tokens = re.findall(r"[a-z0-9]+", (value or "").casefold())
+    normalized = []
+    for token in tokens:
+        if token in _LEXICAL_STOP_WORDS:
+            continue
+        if token.endswith("ies") and len(token) > 4:
+            token = f"{token[:-3]}y"
+        elif token.endswith("ing") and len(token) > 5:
+            token = token[:-3]
+        elif token.endswith("ed") and len(token) > 4:
+            token = token[:-2]
+        elif token.endswith("s") and len(token) > 3:
+            token = token[:-1]
+        normalized.append(token)
+    return set(normalized)
+
+
+def _lexical_match_score(query: str, content: str) -> float:
+    """Score query keyword coverage, prioritizing the stored FAQ question."""
+    query_tokens = _lexical_tokens(query)
+    if not query_tokens:
+        return 0.0
+    question_part = content.split("\nA:", 1)[0]
+    question_tokens = _lexical_tokens(question_part)
+    content_tokens = _lexical_tokens(content)
+    question_overlap = len(query_tokens & question_tokens)
+    content_overlap = len(query_tokens & content_tokens)
+    query_size = len(query_tokens)
+    weighted_score = (
+        0.75 * question_overlap / query_size
+        + 0.25 * content_overlap / query_size
+    )
+    if question_overlap and content_overlap == query_size:
+        return max(weighted_score, 0.9)
+    return weighted_score
 class RAGService:
     """
     RAG Service with multilingual embedding (intfloat/multilingual-e5-small by default)
@@ -59,9 +156,11 @@ class RAGService:
                 self._qdrant = client
                 logger.info(f"[RAG] Connected to Qdrant server at {settings.QDRANT_HOST}:{settings.QDRANT_PORT}")
             except Exception as e:
-                logger.warning(f"[RAG] Remote Qdrant server ({settings.QDRANT_HOST}:{settings.QDRANT_PORT}) unavailable: {e}. Falling back to embedded Qdrant (path='./qdrant_storage')...")
-                self._qdrant = QdrantClient(path="./qdrant_storage")
-            
+                if not settings.QDRANT_ALLOW_LOCAL_FALLBACK:
+                    raise RuntimeError('Shared Qdrant is unavailable and local fallback is disabled.') from e
+                logger.warning('[RAG] Remote Qdrant unavailable; using the development-only local index: %s', e)
+                self._qdrant = QdrantClient(path=settings.VECTOR_DB_PATH)
+
         return self._qdrant
 
     @staticmethod
@@ -131,62 +230,53 @@ class RAGService:
         normalized_inputs = [f"{prefix}{get_embedding_input(t)}" for t in texts]
         return self.embedder.encode(normalized_inputs).tolist()
 
-    def detect_language(self, text: str) -> str:
-        """Detect if the language is English, Devanagari Nepali, or Romanized Nepali."""
-        try:
-            from langdetect import detect
-            import re
+    @staticmethod
+    def extract_document_pages(file_path: str) -> tuple[list[tuple[int, str]], str]:
+        '''Extract text with a parser appropriate for the uploaded file type.'''
+        from pathlib import Path
 
-            text_lower = text.lower()
+        suffix = Path(file_path).suffix.lower()
+        pages: list[tuple[int, str]] = []
+        if suffix == '.pdf':
+            import fitz
+            with fitz.open(file_path) as document:
+                for page_number, page in enumerate(document, start=1):
+                    pages.append((page_number, page.get_text() or ''))
+        elif suffix == '.docx':
+            from docx import Document
+            document = Document(file_path)
+            lines = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+            for table in document.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if cells:
+                        lines.append(' | '.join(cells))
+            pages = [(1, '\n'.join(lines))]
+        elif suffix == '.txt':
+            raw = Path(file_path).read_text(encoding='utf-8', errors='replace')
+            pages = [(1, raw)]
+        else:
+            display_suffix = suffix or 'unknown'
+            raise ValueError(f'Unsupported document type: {display_suffix}')
 
-            for marker in ["k xa", "k ho", "k chha", "kasto xa"]:
-                if marker in text_lower:
-                    return "romanized_nepali"
-
-            words = set(re.findall(r'\b\w+\b', text_lower))
-
-            single_word_markers = {
-                "hajur", "tapai", "tapailai", "malai", "yo", "bhaneko", "cha", "chha", "garne",
-                "bhayo", "xaina", "chaina", "gardai", "garnu", "huncha", "hudaina",
-                "bhanda", "ramro", "dhanyabad", "aahele", "aahile", "maile", "samana",
-                "saman", "kina", "kinne", "milxa", "milchha", "kasari", "kasto", "xa", "parne",
-                "hamro", "pauxa", "paunchha", "khoji", "ehh", "oh", "ho", "nepali"
-            }
-
-            if not words.isdisjoint(single_word_markers):
-                return "romanized_nepali"
-
-            lang = detect(text)
-            if lang == "ne":
-                return "nepali"
-            return "english"
-        except Exception:
-            return "english"
-
+        full_text = '\n'.join(text for _, text in pages).strip()
+        if len(full_text) > settings.KNOWLEDGE_MAX_EXTRACTED_CHARACTERS:
+            raise ValueError('Extracted document text exceeds the configured limit.')
+        return pages, full_text
     def ingest_document(
         self,
         file_path: str,
         filename: str,
         document_id: int,
         business_id: int,
-        db: Session
+        db: Session,
+        source_type: str = "upload"
     ):
         """Parse document into Q&A pairs (or fallback chunks), embed chunks, store in Qdrant and PostgreSQL."""
-        import fitz
-
         logger.info(f"[RAG] Ingesting document: {filename} (ID={document_id})")
 
         try:
-            doc = fitz.open(file_path)
-            full_text_by_page = []
-            full_raw_text = ""
-
-            for page_num, page in enumerate(doc):
-                p_text = page.get_text()
-                full_text_by_page.append((page_num + 1, p_text))
-                full_raw_text += p_text + "\n"
-
-            doc.close()
+            full_text_by_page, full_raw_text = self.extract_document_pages(file_path)
 
             # Attempt Fix 2: Q&A-pair parsing
             parsed_qa = parse_qa_pairs(full_raw_text)
@@ -254,18 +344,34 @@ class RAGService:
                             "content": chunk_data["content"],
                             "page_number": chunk_data["page_number"],
                             "filename": filename,
+                            "source_type": source_type,
+
                         }
                     )
                 )
 
-            db.commit()
-
-            # Batch upsert to Qdrant
+            # Keep SQL rows and vectors in sync. Qdrant has no SQL transaction,
+            # so remove newly written points if either side fails.
             collection_name = self._ensure_business_collection(business_id)
-            self.qdrant.upsert(
-                collection_name=collection_name,
-                points=qdrant_points
-            )
+            point_ids = [point.id for point in qdrant_points]
+            try:
+                self.qdrant.upsert(
+                    collection_name=collection_name,
+                    points=qdrant_points,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                if point_ids:
+                    try:
+                        from qdrant_client.models import PointIdsList
+                        self.qdrant.delete(
+                            collection_name=collection_name,
+                            points_selector=PointIdsList(points=point_ids),
+                        )
+                    except Exception:
+                        logger.exception('[RAG] Failed to clean up partial Qdrant points')
+                raise
 
             logger.info(f"[RAG] Successfully stored {len(chunks)} Q&A chunks for doc {document_id} in Qdrant & DB")
             return len(chunks)
@@ -275,62 +381,161 @@ class RAGService:
             logger.error(f"[RAG] Document ingestion failed: {e}")
             raise e
 
+    def _retrieve_lexical_chunks(
+        self,
+        query_text: str,
+        business_id: int,
+        db: Optional[Session],
+        top_k: int,
+    ) -> list[dict]:
+        """Retrieve tenant-owned FAQ rows when vector search is unavailable or weak."""
+        if db is None:
+            return []
+
+        rows = (
+            db.query(KnowledgeChunk, KnowledgeDocument)
+            .join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeChunk.document_id)
+            .filter(
+                KnowledgeChunk.business_id == business_id,
+                KnowledgeDocument.business_id == business_id,
+                KnowledgeDocument.status == "ready",
+            )
+            .all()
+        )
+        candidates = []
+        for chunk, document in rows:
+            score = _lexical_match_score(query_text, chunk.content)
+            if score <= 0:
+                continue
+            candidates.append({
+                "content": chunk.content,
+                "similarity": score,
+                "lexical_similarity": score,
+                "page_number": chunk.page_number,
+                "filename": document.filename or "",
+                "chunk_id": chunk.id,
+                "document_id": chunk.document_id,
+                "source_type": document.source_type or "upload",
+            })
+
+        candidates.sort(
+            key=lambda item: (item["similarity"], len(item["content"])),
+            reverse=True,
+        )
+        if candidates:
+            unique_candidates = []
+            seen_questions = set()
+            for item in candidates:
+                question_key = item["content"].split("\nA:", 1)[0].strip().casefold()
+                if question_key in seen_questions:
+                    continue
+                seen_questions.add(question_key)
+                unique_candidates.append(item)
+            candidates = unique_candidates
+            best_score = candidates[0]["similarity"]
+            minimum_score = max(CONFIDENCE_THRESHOLD, best_score - 0.2)
+            candidates = [
+                item for item in candidates if item["similarity"] >= minimum_score
+            ]
+        return candidates[:top_k]
+
     def retrieve_chunks(
         self,
         query_text: str,
         business_id: int,
-        top_k: int = 5
+        top_k: int = 5,
+        db: Optional[Session] = None,
     ) -> list[dict]:
-        """Search Qdrant for top_k relevant chunks for a business."""
+        """Search vectors and fall back to tenant-scoped lexical FAQ retrieval."""
+        chunks = []
         try:
             if not self._collection_exists(business_id):
                 logger.info("[RAG] No knowledge collection exists for business %s", business_id)
-                return []
-            collection_name = self.collection_name_for_business(business_id)
-            query_embedding = self.embed_text(query_text)
+            else:
+                collection_name = self.collection_name_for_business(business_id)
+                query_embedding = self.embed_text(query_text)
+                query_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="business_id",
+                            match=MatchValue(value=business_id),
+                        )
+                    ]
+                )
+                candidate_limit = max(top_k, top_k * 4)
 
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="business_id",
-                        match=MatchValue(value=business_id)
+                if hasattr(self.qdrant, "search"):
+                    results = self.qdrant.search(
+                        collection_name=collection_name,
+                        query_vector=query_embedding,
+                        query_filter=query_filter,
+                        limit=candidate_limit,
+                        with_payload=True,
                     )
-                ]
+                else:
+                    response = self.qdrant.query_points(
+                        collection_name=collection_name,
+                        query=query_embedding,
+                        query_filter=query_filter,
+                        limit=candidate_limit,
+                        with_payload=True,
+                    )
+                    results = response.points
+
+                for result in results:
+                    payload = result.payload or {}
+                    chunks.append({
+                        "content": payload.get("content", ""),
+                        "similarity": result.score,
+                        "page_number": payload.get("page_number"),
+                        "filename": payload.get("filename", ""),
+                        "chunk_id": payload.get("chunk_id"),
+                        "document_id": payload.get("document_id"),
+                        "source_type": payload.get("source_type", "upload"),
+                    })
+        except Exception as e:
+            logger.warning(
+                "[RAG] Qdrant search unavailable (%s). Trying tenant-scoped FAQ retrieval.",
+                e,
             )
 
-            if hasattr(self.qdrant, 'search'):
-                results = self.qdrant.search(
-                    collection_name=collection_name,
-                    query_vector=query_embedding,
-                    query_filter=query_filter,
-                    limit=top_k,
-                    with_payload=True,
+        vector_score = max(
+            (float(chunk.get("similarity") or 0) for chunk in chunks),
+            default=0.0,
+        )
+        if db is not None and (not chunks or vector_score < CONFIDENCE_THRESHOLD):
+            try:
+                lexical_chunks = self._retrieve_lexical_chunks(
+                    query_text, business_id, db, top_k
                 )
-            else:
-                response = self.qdrant.query_points(
-                    collection_name=collection_name,
-                    query=query_embedding,
-                    query_filter=query_filter,
-                    limit=top_k,
-                    with_payload=True,
-                )
-                results = response.points
+                if lexical_chunks:
+                    by_chunk_id = {
+                        chunk.get("chunk_id"): chunk
+                        for chunk in chunks
+                        if chunk.get("chunk_id") is not None
+                    }
+                    for lexical in lexical_chunks:
+                        existing = by_chunk_id.get(lexical["chunk_id"])
+                        if existing is None:
+                            chunks.append(lexical)
+                            continue
+                        existing["lexical_similarity"] = lexical["lexical_similarity"]
+                        existing["similarity"] = max(
+                            float(existing.get("similarity") or 0),
+                            lexical["lexical_similarity"],
+                        )
+                    chunks.sort(
+                        key=lambda item: (
+                            float(item.get("similarity") or 0),
+                            len(item.get("content") or ""),
+                        ),
+                        reverse=True,
+                    )
+                    return chunks[:top_k]
+            except Exception as e:
+                logger.warning("[RAG] Tenant-scoped FAQ retrieval failed: %s", e)
 
-            chunks = []
-            for result in results:
-                chunks.append({
-                    "content": result.payload.get("content", ""),
-                    "similarity": result.score,
-                    "page_number": result.payload.get("page_number"),
-                    "filename": result.payload.get("filename", ""),
-                    "chunk_id": result.payload.get("chunk_id"),
-                    "document_id": result.payload.get("document_id"),
-                })
-
-            return chunks
-        except Exception as e:
-            logger.warning(f"[RAG] Qdrant search unavailable ({e}). Proceeding with general AI model knowledge.")
-            return []
+        return chunks[:top_k]
 
     async def query(
         self,
@@ -354,7 +559,38 @@ class RAGService:
         resolved_business_name = (business_name or "").strip()
 
         try:
-            detected_lang = language or self.detect_language(question)
+            direct_response = private_owner_contact_response(question)
+            if direct_response:
+                detected_lang = (
+                    "romanized_nepali"
+                    if _looks_romanized_nepali(question)
+                    else (language or "english")
+                )
+                return {
+                    "answer": direct_response,
+                    "confidence": 0.0,
+                    "sources": [],
+                    "chunks_used": 0,
+                    "source_details": [],
+                    "grounded": False,
+                    "language_detected": detected_lang,
+                    "metadata": {
+                        "model": "policy-rule",
+                        "provider": "internal",
+                        "fallback_used": False,
+                        "attempts": 0,
+                        "latency_ms": round((time.time() - start_time) * 1000, 2),
+                        "grounded": False,
+                        "direct_response": "private_owner_contact",
+                    },
+                }
+            from app.services.context_translator import context_translator
+
+            # 1. Dynamically analyze language and get English translation for search
+            analysis = await context_translator.analyze_and_translate(question)
+            english_question = analysis["english_translation"]
+            detected_lang = language or analysis["detected_language"]
+
             if not resolved_business_name and db:
                 business = db.query(Business).filter(
                     Business.id == business_id
@@ -362,27 +598,42 @@ class RAGService:
                 resolved_business_name = (business.name or "").strip() if business else ""
             resolved_business_name = resolved_business_name or "Support Team"
 
-            # 1. Retrieve relevant chunks
-            chunks = self.retrieve_chunks(question, business_id, top_k)
+            # 2. Retrieve relevant chunks using the English question
+            chunks = self.retrieve_chunks(english_question, business_id, top_k, db=db)
             top_score = chunks[0]["similarity"] if chunks else 0.0
 
             sources = []
-            if chunks and top_score >= confidence_threshold:
-                logger.info(f"[RAG] Retrieved {len(chunks)} chunks. Top score: {top_score:.3f}")
-                context = "\n\n---\n\n".join([
-                    f"[Page {c['page_number']}] {c['content']}"
+            source_details = []
+            grounded = bool(chunks and top_score >= confidence_threshold)
+            if grounded:
+                logger.info(f'[RAG] Retrieved {len(chunks)} chunks. Top score: {top_score:.3f}')
+                context = '\n\n---\n\n'.join([
+                    f'[Page {c["page_number"]}] {c["content"]}'
                     for c in chunks
                 ])
-                sources = list(set(c["filename"] for c in chunks if c["filename"]))
+                source_details = [
+                    {
+                        'filename': c.get('filename', ''),
+                        'page_number': c.get('page_number'),
+                        'chunk_id': c.get('chunk_id'),
+                        'similarity': round(float(c.get('similarity') or 0), 4),
+                        'source_type': c.get('source_type', 'upload'),
+                    }
+                    for c in chunks
+                ]
+                sources = list(dict.fromkeys(
+                    detail['filename'] for detail in source_details if detail['filename']
+                ))
             else:
                 logger.info(
-                    f"[RAG] Low confidence ({top_score:.3f}) or no chunks found. "
-                    "Refusing cross-business/general policy assumptions."
+                    f'[RAG] Low confidence ({top_score:.3f}) or no chunks found. '
+                    'Refusing cross-business/general policy assumptions.'
                 )
                 context = (
-                    "No sufficiently relevant business document was found. "
-                    "Do not invent an answer or use another business's policies. "
-                    "Tell the customer that the support team needs to confirm this information."
+                    'No sufficiently relevant business document was found. '
+                    'Do not invent an answer, use a different business policy, or promise a future reply. '
+                    'Briefly say the information cannot be confirmed here and ask the customer to '
+                    'send the relevant details in this chat.'
                 )
 
             # 2. Build system prompt using unified prompt builder (Fix 4)
@@ -407,7 +658,7 @@ class RAGService:
 
                 db_messages = history_query.order_by(Message.timestamp.desc()).limit(10).all()
                 db_messages.reverse()
-                
+
                 for m in db_messages:
                     if not m.content:
                         continue
@@ -415,26 +666,33 @@ class RAGService:
                     past_messages.append({"role": role, "content": m.content})
 
             messages = [{"role": "system", "content": system_prompt}]
-            
+
             for pm in past_messages:
                 messages.append(pm)
-                
+
             # Unconditionally append current question as final user message (Fix 1)
             messages.append({"role": "user", "content": question})
 
-            result = await llm_gateway.complete(messages=messages, max_tokens=500)
+            result = await llm_gateway.complete(messages=messages, max_tokens=2000)
 
             if not result or not result.get("content"):
                 logger.warning("[RAG] LLM returned empty response")
-                return None
+                raise RuntimeError("LLM returned an empty response")
+
+            generated_answer = result["content"]
+
+            # 4. Translate the generated response back to the customer's language style
+            final_answer = await context_translator.translate_to_target_language(generated_answer, detected_lang)
 
             latency_ms = round((time.time() - start_time) * 1000, 2)
 
             return {
-                "answer": result["content"],
-                "confidence": top_score,
+                "answer": final_answer,
+                "confidence": top_score if grounded else 0.0,
                 "sources": sources,
-                "chunks_used": len(chunks) if sources else 0,
+                "chunks_used": len(chunks) if grounded else 0,
+                "source_details": source_details,
+                "grounded": grounded,
                 "language_detected": detected_lang,
                 "metadata": {
                     "model": result.get("model", "unknown"),
@@ -442,6 +700,9 @@ class RAGService:
                     "fallback_used": result.get("fallback_used", False),
                     "attempts": result.get("attempts", 1),
                     "latency_ms": latency_ms,
+                    "grounded": grounded,
+                    "confidence_threshold": confidence_threshold,
+                    "source_details": source_details,
                 }
             }
 
@@ -471,12 +732,24 @@ class RAGService:
             )
             return {
                 "answer": fallback_answer,
-                "confidence": 0.5,
+                "confidence": 0.0,
                 "sources": [],
                 "chunks_used": 0,
+                "source_details": [],
+                "grounded": False,
                 "language_detected": lang,
-                "metadata": {"fallback_used": True, "error": str(e)}
+                "metadata": {"fallback_used": True, "grounded": False, "error": str(e)}
             }
+
+    def delete_business_collection(self, business_id: int) -> bool:
+        '''Permanently remove the isolated vector collection for one business.'''
+        if not self._collection_exists(business_id):
+            return False
+        collection_name = self.collection_name_for_business(business_id)
+        self.qdrant.delete_collection(collection_name=collection_name)
+        self._initialized_collections.discard(collection_name)
+        logger.info('[RAG] Deleted business collection %s', collection_name)
+        return True
 
     def delete_document_chunks(self, document_id: int, business_id: int, db: Session):
         """Delete all chunks for a document from both Qdrant and PostgreSQL."""
@@ -497,6 +770,7 @@ class RAGService:
                 logger.info(f"[RAG] Deleted {len(chunk_ids)} points from Qdrant")
             except Exception as e:
                 logger.error(f"[RAG] Failed to delete from Qdrant: {e}")
+                raise
 
         db.query(KnowledgeChunk).filter(
             KnowledgeChunk.document_id == document_id,
@@ -517,9 +791,13 @@ class RAGService:
 
         new_embedding = self.embed_text(new_content, prefix="passage: ")
 
-        # Update PostgreSQL content
+        # Update PostgreSQL content after vector indexing succeeds
         chunk.content = new_content
-        db.commit()
+
+        document = db.query(KnowledgeDocument).filter(
+            KnowledgeDocument.id == chunk.document_id,
+            KnowledgeDocument.business_id == business_id,
+        ).first()
 
         # Update Qdrant (sole vector store)
         collection_name = self._ensure_business_collection(business_id)
@@ -535,11 +813,15 @@ class RAGService:
                         "chunk_id": chunk_id,
                         "content": new_content,
                         "page_number": chunk.page_number,
-                        "filename": "",
+                        "filename": document.filename if document else "",
+                        "source_type": document.source_type if document else "upload",
                     }
                 )
             ]
         )
+        if document and document.status == "draft":
+            document.status = "ready"
+        db.commit()
         logger.info(f"[RAG] Chunk {chunk_id} updated in Qdrant and PostgreSQL")
 
 

@@ -13,7 +13,23 @@ def _is_document_noise(line: str) -> bool:
         or re.fullmatch(r"(?:table\s+of\s+)?contents", normalized, re.IGNORECASE)
         or re.fullmatch(r"all\s+questions\s+and\s+answers", normalized, re.IGNORECASE)
         or re.fullmatch(r"(?:for\s+)?rag(?:\s+ai)?\s+knowledge\s+base", normalized, re.IGNORECASE)
+        or normalized.casefold() in {
+            "techsuru rag ai knowledge base",
+            "all questions and answers for business ai training",
+            "for rag ai assistant training and business faq use",
+        }
+        or re.fullmatch(r"\d+\.\s+.+?(?:\s+-\s+\d+\s+q&as?;?)?", normalized, re.IGNORECASE)
     )
+
+
+def _clean_qa_field(value: str) -> str:
+    """Remove repeated PDF headers/section lines while preserving real content."""
+    lines = [
+        line.strip()
+        for line in value.splitlines()
+        if line.strip() and not _is_document_noise(line)
+    ]
+    return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
 
 def parse_qa_pairs(text: str) -> List[Dict[str, str]]:
@@ -27,35 +43,32 @@ def parse_qa_pairs(text: str) -> List[Dict[str, str]]:
         return []
 
     # Pattern matching Q1) or Q1: or Question 1: followed by answer marker A) or A: or Answer:
-    pattern = r"(?:Q\d*[\s.:)-]|Question\s*\d*[\s.:)-])\s*(.+?)\s*(?:A\d*[\s.:)-]|Answer\s*\d*[\s.:)-])\s*(.+?)(?=(?:Q\d*[\s.:)-]|Question\s*\d*[\s.:)-])|\Z)"
-    matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+    # Q/A markers are normally at the start of a line, but an answer marker
+    # may also follow the question on the same line. Requiring punctuation
+    # after A prevents the lowercase "a" in "test a product" from ending
+    # the question early.
+    question_marker = r"(?:Q\d*|Question\s*\d*)\s*[.:)\-]"
+    answer_marker = r"(?:A\d*|Answer\s*\d*)\s*[.:)\-]"
+    pattern = re.compile(
+        rf"^[ \t]*{question_marker}[ \t]*(?P<question>.*?)"
+        rf"[ \t]*{answer_marker}[ \t]*(?P<answer>.*?)"
+        rf"(?=^[ \t]*{question_marker}|\Z)",
+        re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
 
     qa_pairs = []
-    for q_match, a_match in matches:
-        q_raw = q_match.strip()
-        a_raw = a_match.strip()
+    for match in pattern.finditer(text):
+        q_raw = match.group("question").strip()
+        a_raw = match.group("answer").strip()
 
         # Skip cover page / meta dataset text artifacts
-        if any(ignore in q_raw or ignore in a_raw for ignore in [
-            "This PDF contains", "structured FA", "RAG AI Knowledge Base"
+        if any(ignore.casefold() in q_raw.casefold() or ignore.casefold() in a_raw.casefold() for ignore in [
+            "This PDF contains", "structured FAQ", "RAG AI Knowledge Base"
         ]):
             continue
 
-        # Filter out header artifacts from question text
-        q_lines = q_raw.split('\n')
-        if len(q_lines) > 1:
-            filtered_lines = [
-                line for line in q_lines
-                if not _is_document_noise(line)
-            ]
-            q_raw = " ".join(filtered_lines).strip()
-
-        # Remove section titles like "1. Company Information\nWhat is..."
-        q_clean = re.sub(r'^\d+\.\s+[A-Za-z\s,-]+?\n', '', q_raw).strip()
-
-        # Normalize spaces
-        q_clean = re.sub(r'\s+', ' ', q_clean).strip()
-        a_clean = re.sub(r'\s+', ' ', a_raw).strip()
+        q_clean = _clean_qa_field(q_raw)
+        a_clean = _clean_qa_field(a_raw)
 
         # Skip invalid or TOC entries (e.g., "10 Q&As;" or truncated headers)
         if not q_clean or not a_clean or len(q_clean) < 5:

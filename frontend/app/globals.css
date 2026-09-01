@@ -26,7 +26,7 @@
 }
 
 :root {
-  --background: #F8FAFC;
+  --background: #FFFFFF;
   --surface: #FFFFFF;
   --surface-wash: #F1F5F9;
   --border: #E2E8F0;
@@ -47,7 +47,7 @@
   --warning-surface: rgba(245, 158, 11, 0.10);
   --warning-border: rgba(245, 158, 11, 0.28);
   
-  --nav-bg: rgba(248, 250, 252, 0.85);
+  --nav-bg: #FFFFFF;
   --nav-border: rgba(15, 14, 12, 0.10);
   --accent-hover: #3a2fb8;
   --teal: #0f9b72;
@@ -216,10 +216,9 @@ h6 {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
 /* Neural Mesh Gradient */
-.bg-mesh-gradient { background-color: var(--background); background-image:
-    radial-gradient(at 0% 0%, hsla(255, 75%, 60%, 0.08) 0, transparent 50%),
-    radial-gradient(at 50% 0%, hsla(263, 60%, 45%, 0.05) 0, transparent 50%),
-    radial-gradient(at 100% 0%, hsla(180, 70%, 50%, 0.04) 0, transparent 50%);
+.bg-mesh-gradient {
+  background-color: var(--background);
+  background-image: none;
 }
 
 .card-glossy {
@@ -367,9 +366,71 @@ select option {
 .ds-button-secondary { border: 1px solid var(--border); background: var(--surface-wash); color: var(--text-primary); }
 .ds-button-danger { background: var(--error); color: var(--on-accent); }
 
+.icon-button {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--surface-wash);
+  color: var(--text-secondary);
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.icon-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--accent);
+}
+
+.icon-button:active { transform: scale(0.96); }
+
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1rem;
+  transition: color 160ms ease, opacity 160ms ease;
+}
+
+.text-button:hover { color: var(--accent-hover); }
+
+/* Shared account control: use a standard person silhouette rather than an
+   inconsistent remote or cached profile image. */
+[data-profile-menu] > button > div:first-child {
+  position: relative;
+  font-size: 0;
+}
+
+[data-profile-menu] > button > div:first-child > img {
+  display: none;
+}
+
+[data-profile-menu] > button > div:first-child::after {
+  content: '';
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  background: var(--on-accent);
+  -webkit-mask: url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%230F172A%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M20%2021a8%208%200%200%200-16%200%22/%3E%3Ccircle%20cx=%2212%22%20cy=%227%22%20r=%224%22/%3E%3C/svg%3E) center / contain no-repeat;
+  mask: url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%230F172A%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M20%2021a8%208%200%200%200-16%200%22/%3E%3Ccircle%20cx=%2212%22%20cy=%227%22%20r=%224%22/%3E%3C/svg%3E) center / contain no-repeat;
+}
+
 .ds-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-card);
+}
+
+.brand-gradient-text {
+  background: linear-gradient(135deg, #6D4AE2 0%, #2563EB 50%, #4F46E5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

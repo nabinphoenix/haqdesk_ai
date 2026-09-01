@@ -1,0 +1,99 @@
+flowchart LR
+    %% HaqDesk AI - Communication Channel Integration Use Case Diagram (UML 2.5)
+
+    %% Actors
+    subgraph LEFT_ACTORS [ ]
+        direction TB
+        ADMIN["👤 Business Admin\n<<primary actor>>"]
+    end
+
+    subgraph RIGHT_ACTORS [ ]
+        direction TB
+        META["🖥️ Meta Platform\n(Messenger & Instagram)"]
+        GMAIL["🖥️ Gmail / Email Service\n(IMAP & SMTP)"]
+    end
+
+    %% System Boundary
+    subgraph SYS ["HaqDesk AI – Communication Channel Integration"]
+        direction TB
+
+        %% Package 1: Admin Management
+        subgraph G_ADMIN ["Integration Management & Lifecycle"]
+            UC_ACCESS_SETTINGS(["Access Integration Settings"]):::usecase
+            UC_CONFIG_CHANNEL(["Configure Communication Channel"]):::usecase
+            UC_AUTH_INTEG(["Authenticate / Authorize Integration"]):::usecase
+            UC_VERIFY_INTEG(["Verify Integration Connection"]):::usecase
+            UC_VIEW_STATUS(["View Integration Status"]):::usecase
+            UC_UPDATE_INTEG(["Update Integration Settings"]):::usecase
+            UC_DISCONNECT_INTEG(["Disconnect Integration"]):::usecase
+        end
+
+        %% Package 2: Meta Platform Channel Setup
+        subgraph G_META ["Meta Platform Channel Setup"]
+            UC_CONNECT_META(["Connect Meta Integration"]):::usecase
+            UC_CONFIG_FB(["Configure Facebook Messenger\n[Active FYP Demonstrated Channel]"]):::usecase
+            UC_CONFIG_IG(["Configure Instagram Direct\n[Active FYP Demonstrated Channel]"]):::usecase
+            UC_CONFIG_WA(["Configure WhatsApp Business\n(Architectural Extension · Subject to Meta Verification)"]):::extusecase
+        end
+
+        %% Package 3: Gmail / Email Setup
+        subgraph G_EMAIL ["Gmail / Support Email Setup"]
+            UC_CONNECT_GMAIL(["Connect Gmail / Email Account\n[Active FYP Demonstrated Channel]"]):::usecase
+            UC_CONFIG_EMAIL_SERVER(["Configure Email Ingestion & Dispatch"]):::usecase
+        end
+
+        %% Package 4: Operational Ingestion & Dispatch
+        subgraph G_OPS ["Operational Ingestion & Dispatch Engine"]
+            UC_PROCESS_META(["Process Meta Communication"]):::usecase
+            UC_RETRIEVE_GMAIL(["Retrieve Gmail Messages"]):::usecase
+            UC_RECEIVE_MSG(["Receive Customer Message"]):::usecase
+            UC_SYNC_MSGS(["Synchronize Customer Messages"]):::usecase
+            UC_SEND_RESP(["Send Customer Response"]):::usecase
+        end
+    end
+
+    %% Admin Associations
+    ADMIN --- UC_ACCESS_SETTINGS
+    ADMIN --- UC_CONFIG_CHANNEL
+    ADMIN --- UC_VIEW_STATUS
+    ADMIN --- UC_UPDATE_INTEG
+    ADMIN --- UC_DISCONNECT_INTEG
+
+    %% External Actor Associations
+    META --- UC_PROCESS_META
+    META --- UC_RECEIVE_MSG
+    META --- UC_SEND_RESP
+
+    GMAIL --- UC_RETRIEVE_GMAIL
+    GMAIL --- UC_RECEIVE_MSG
+    GMAIL --- UC_SEND_RESP
+
+    %% Include / Extend Relationships
+    UC_ACCESS_SETTINGS -. "<<include>>" .-> UC_VIEW_STATUS
+    UC_CONFIG_CHANNEL -. "<<include>>" .-> UC_AUTH_INTEG
+    UC_CONFIG_CHANNEL -. "<<include>>" .-> UC_VERIFY_INTEG
+
+    UC_CONNECT_META -. "<<extend>>" .-> UC_CONFIG_CHANNEL
+    UC_CONFIG_FB -. "<<include>>" .-> UC_CONNECT_META
+    UC_CONFIG_IG -. "<<include>>" .-> UC_CONNECT_META
+    UC_CONFIG_WA -. "<<extend>>\n[Eligible Extension]" .-> UC_CONNECT_META
+
+    UC_CONNECT_GMAIL -. "<<extend>>" .-> UC_CONFIG_CHANNEL
+    UC_CONNECT_GMAIL -. "<<include>>" .-> UC_CONFIG_EMAIL_SERVER
+
+    UC_RECEIVE_MSG -. "<<include>>" .-> UC_PROCESS_META
+    UC_RECEIVE_MSG -. "<<include>>" .-> UC_RETRIEVE_GMAIL
+    UC_RECEIVE_MSG -. "<<include>>" .-> UC_SYNC_MSGS
+    UC_SEND_RESP -. "<<include>>" .-> UC_SYNC_MSGS
+
+    %% Styling for Academic B&W UML Cleanliness
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1.5px,color:#000000;
+    classDef usecase fill:#ffffff,stroke:#000000,stroke-width:1.8px,color:#000000;
+    classDef extusecase fill:#ffffff,stroke:#000000,stroke-width:1.8px,stroke-dasharray: 5 4,color:#000000;
+    style SYS fill:#ffffff,stroke:#000000,stroke-width:2.2px;
+    style G_ADMIN fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_META fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_EMAIL fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style G_OPS fill:#fafafa,stroke:#888888,stroke-width:1px,stroke-dasharray: 4 4;
+    style LEFT_ACTORS fill:none,stroke:none;
+    style RIGHT_ACTORS fill:none,stroke:none;

@@ -158,3 +158,27 @@ export interface AnalyticsFilterState {
   include_deleted: boolean;
   comparison: "none" | "previous_period";
 }
+
+export interface FAQOpportunity {
+  fingerprint: string;
+  suggested_title: string;
+  representative_question: string;
+  example_questions: string[];
+  occurrence_count: number;
+  unique_customer_count: number;
+  channels: Record<string, number>;
+  last_asked_at: string | null;
+  status: "active" | "dismissed" | "draft_created" | string;
+  knowledge_document_id: number | null;
+}
+
+export interface FAQOpportunitiesResponse {
+  generated_at: string;
+  analysis_method: "semantic_embeddings" | "text_similarity_fallback" | string;
+  messages_scanned: number;
+  question_candidates: number;
+  minimum_occurrences: number;
+  minimum_unique_customers: number;
+  opportunities: FAQOpportunity[];
+  privacy_note: string;
+}

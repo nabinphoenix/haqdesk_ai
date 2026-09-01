@@ -1,0 +1,575 @@
+import os
+import fitz
+
+def generate_system_architecture():
+    svg = """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1200" width="2000" height="1200" style="background-color: #FFFFFF; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <!-- Drop Shadow Filters -->
+    <filter id="shadow-sm" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.06"/>
+    </filter>
+    <filter id="shadow-md" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Markers for Arrows -->
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#7C3AED"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#D97706"/>
+    </marker>
+  </defs>
+
+  <!-- ==================== HEADER ==================== -->
+  <rect x="0" y="0" width="2000" height="75" fill="#0F172A"/>
+  <text x="45" y="36" font-size="22" font-weight="700" fill="#F8FAFC" letter-spacing="0.5">HAQDESK AI — SYSTEM ARCHITECTURE DIAGRAM</text>
+  <text x="45" y="58" font-size="13.5" font-weight="400" fill="#94A3B8">High-Level Multichannel Customer Support Platform with Multi-Tenant RAG &amp; Human-in-the-Loop AI Architecture (BSc IT Final Year Project)</text>
+  <rect x="1710" y="22" width="245" height="32" rx="4" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+  <text x="1832" y="43" font-size="12.5" font-weight="600" fill="#38BDF8" text-anchor="middle">Academic Report: Chapter 4 Design</text>
+
+  <!-- ==================== MAIN CONTAINER BOUNDARY (HAQDESK AI SYSTEM) ==================== -->
+  <rect x="35" y="95" width="1410" height="1025" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" filter="url(#shadow-md)"/>
+  <rect x="35" y="95" width="1410" height="38" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5"/>
+  <path d="M 35 120 L 35 133 L 1445 133 L 1445 120 Z" fill="#F1F5F9"/>
+  <text x="55" y="120" font-size="14.5" font-weight="700" fill="#1E293B" letter-spacing="0.5">🛡️ HAQDESK AI SYSTEM BOUNDARY (MULTI-TENANT ISOLATED CORE)</text>
+  <text x="1425" y="120" font-size="12" font-weight="600" fill="#64748B" text-anchor="end">Business/Tenant-Scoped Execution Context</text>
+
+  <!-- ==================== TIER 0: ACTORS / USERS ==================== -->
+  <!-- Admin & Staff -->
+  <g transform="translate(65, 145)">
+    <rect x="0" y="0" width="470" height="68" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <text x="20" y="26" font-size="13.5" font-weight="700" fill="#1E40AF">👤 Business Admin / Super Admin</text>
+    <text x="20" y="47" font-size="11.5" fill="#3B82F6">Tenant setup, Channel OAuth, Team RBAC, Knowledge upload, Mode config</text>
+  </g>
+
+  <g transform="translate(560, 145)">
+    <rect x="0" y="0" width="470" height="68" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <text x="20" y="26" font-size="13.5" font-weight="700" fill="#1E40AF">👥 Support Staff (Supervisor &amp; Agent)</text>
+    <text x="20" y="47" font-size="11.5" fill="#3B82F6">Unified inbox workspace, AI draft review/edit/send, Customer management, Internal chat</text>
+  </g>
+
+  <!-- External Customer Box (Placed right side) -->
+  <g transform="translate(1500, 145)">
+    <rect x="0" y="0" width="465" height="68" rx="8" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <text x="20" y="26" font-size="13.5" font-weight="700" fill="#92400E">🌐 End Customer / Consumer</text>
+    <text x="20" y="47" font-size="11.5" fill="#B45309">Interacts natively via Facebook, Instagram, or Gmail (No HaqDesk login required)</text>
+  </g>
+
+  <!-- Flow Arrows: Actors to Presentation Layer -->
+  <line x1="300" y1="213" x2="300" y2="238" stroke="#2563EB" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="310" y="230" font-size="10.5" font-weight="600" fill="#2563EB">HTTPS / Browser</text>
+
+  <line x1="795" y1="213" x2="795" y2="238" stroke="#2563EB" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="805" y="230" font-size="10.5" font-weight="600" fill="#2563EB">HTTPS / Browser</text>
+
+  <!-- ==================== LAYER 1: PRESENTATION LAYER ==================== -->
+  <g transform="translate(55, 242)">
+    <rect x="0" y="0" width="1370" height="150" rx="8" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect x="0" y="0" width="1370" height="28" rx="8" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+    <path d="M 0 20 L 0 28 L 1370 28 L 1370 20 Z" fill="#F8FAFC"/>
+    <text x="15" y="19" font-size="12.5" font-weight="700" fill="#334155">1. PRESENTATION LAYER (Next.js 15 • TypeScript • React • Tailwind CSS)</text>
+    <text x="1355" y="19" font-size="11" font-weight="600" fill="#64748B" text-anchor="end">Single Page Architecture &amp; Server-Side Rendering</text>
+
+    <!-- Components in Presentation Layer -->
+    <!-- 1. Auth & Admin -->
+    <rect x="15" y="38" width="250" height="98" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="25" y="56" font-size="12" font-weight="700" fill="#0F172A">Auth &amp; Onboarding UI</text>
+    <text x="25" y="74" font-size="10.5" fill="#475569">• Login / Register / Invite Flow</text>
+    <text x="25" y="90" font-size="10.5" fill="#475569">• Role-Based Route Guards</text>
+    <text x="25" y="106" font-size="10.5" fill="#475569">• OAuth Callback Handler</text>
+    <text x="25" y="122" font-size="10.5" fill="#475569">• Super Admin Portal UI</text>
+
+    <!-- 2. Unified Inbox Workspace -->
+    <rect x="280" y="38" width="275" height="98" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="290" y="56" font-size="12" font-weight="700" fill="#0F172A">Unified Inbox Workspace</text>
+    <text x="290" y="74" font-size="10.5" fill="#475569">• Multi-Channel Thread Viewer</text>
+    <text x="290" y="90" font-size="10.5" fill="#475569">• Real-time Conversation Filter</text>
+    <text x="290" y="106" font-size="10.5" fill="#475569">• Customer Details &amp; Merge Panel</text>
+    <text x="290" y="122" font-size="10.5" fill="#475569">• Unread Badges &amp; Priority Tags</text>
+
+    <!-- 3. AI Copilot Review Box -->
+    <rect x="570" y="38" width="255" height="98" rx="6" fill="#FAF5FF" stroke="#C084FC" stroke-width="1.2"/>
+    <text x="580" y="56" font-size="12" font-weight="700" fill="#6B21A8">AI Copilot Review Interface</text>
+    <text x="580" y="74" font-size="10.5" fill="#7E22CE">• AI Suggested Response Card</text>
+    <text x="580" y="90" font-size="10.5" fill="#7E22CE">• Confidence &amp; Source Badges</text>
+    <text x="580" y="106" font-size="10.5" fill="#7E22CE">• Human Edit / Approve / Reject</text>
+    <text x="580" y="122" font-size="10.5" fill="#7E22CE">• Sentiment &amp; Language Indicator</text>
+
+    <!-- 4. Knowledge Base UI -->
+    <rect x="840" y="38" width="250" height="98" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="850" y="56" font-size="12" font-weight="700" fill="#0F172A">Knowledge Base UI</text>
+    <text x="850" y="74" font-size="10.5" fill="#475569">• Document Upload (PDF/TXT)</text>
+    <text x="850" y="90" font-size="10.5" fill="#475569">• Chunk Explorer &amp; Q&amp;A Editor</text>
+    <text x="850" y="106" font-size="10.5" fill="#475569">• Semantic Search Query Tester</text>
+    <text x="850" y="122" font-size="10.5" fill="#475569">• Vector Indexing Status Monitor</text>
+
+    <!-- 5. Internal Messaging & Analytics -->
+    <rect x="1105" y="38" width="250" height="98" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="1115" y="56" font-size="12" font-weight="700" fill="#0F172A">Team, Chat &amp; Analytics</text>
+    <text x="1115" y="74" font-size="10.5" fill="#475569">• WebSocket Internal Staff Chat</text>
+    <text x="1115" y="90" font-size="10.5" fill="#475569">• Analytics &amp; Volume Charts</text>
+    <text x="1115" y="106" font-size="10.5" fill="#475569">• Sentiment Trends &amp; Agent SLA</text>
+    <text x="1115" y="122" font-size="10.5" fill="#475569">• Channel Integration Settings</text>
+  </g>
+
+  <!-- Flow Arrows: Presentation to Backend Layer -->
+  <line x1="390" y1="392" x2="390" y2="425" stroke="#2563EB" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="400" y="413" font-size="10.5" font-weight="600" fill="#2563EB">REST API (JWT Auth / Bearer Token)</text>
+
+  <line x1="1230" y1="392" x2="1230" y2="425" stroke="#059669" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <text x="1240" y="413" font-size="10.5" font-weight="600" fill="#059669">WebSocket (/api/v1/internal-messages/ws)</text>
+
+  <!-- ==================== LAYER 2: APPLICATION / BACKEND LAYER ==================== -->
+  <g transform="translate(55, 430)">
+    <rect x="0" y="0" width="1370" height="235" rx="8" fill="#FFFFFF" stroke="#64748B" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect x="0" y="0" width="1370" height="28" rx="8" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5"/>
+    <path d="M 0 20 L 0 28 L 1370 28 L 1370 20 Z" fill="#F8FAFC"/>
+    <text x="15" y="19" font-size="12.5" font-weight="700" fill="#334155">2. APPLICATION &amp; BACKEND LAYER (FastAPI • Python 3.13 • Uvicorn ASGI)</text>
+    <text x="1355" y="19" font-size="11" font-weight="600" fill="#64748B" text-anchor="end">Asynchronous Micro-Service Architecture with Tenant Security Boundaries</text>
+
+    <!-- Submodule 1: Security & Identity -->
+    <rect x="15" y="38" width="250" height="182" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="25" y="56" font-size="12" font-weight="700" fill="#0F172A">Auth &amp; Security Engine</text>
+    <text x="25" y="74" font-size="10.5" fill="#475569">• JWT Access Tokens (HS256)</text>
+    <text x="25" y="90" font-size="10.5" fill="#475569">• Passlib / Bcrypt Hashing</text>
+    <text x="25" y="106" font-size="10.5" fill="#475569">• RBAC (Admin, Supervisor, Agent)</text>
+    <text x="25" y="122" font-size="10.5" fill="#475569">• Tenant Isolation Guard</text>
+    <text x="25" y="138" font-size="10.5" fill="#475569">• OAuth2 Session Middleware</text>
+    <text x="25" y="154" font-size="10.5" fill="#475569">• Credential Encryption (AES)</text>
+    <text x="25" y="170" font-size="10.5" fill="#475569">• IDOR Prevention Layer</text>
+
+    <!-- Submodule 2: Unified Inbox & Customer Services -->
+    <rect x="280" y="38" width="265" height="182" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="290" y="56" font-size="12" font-weight="700" fill="#0F172A">Inbox &amp; Customer Services</text>
+    <text x="290" y="74" font-size="10.5" fill="#475569">• Multi-Channel Conversation Router</text>
+    <text x="290" y="90" font-size="10.5" fill="#475569">• Customer Identity Resolver</text>
+    <text x="290" y="106" font-size="10.5" fill="#475569">• Cross-Platform Customer Merging</text>
+    <text x="290" y="122" font-size="10.5" fill="#475569">• Agent Assignment &amp; SLA Tracking</text>
+    <text x="290" y="138" font-size="10.5" fill="#475569">• Outbound Reply Dispatcher</text>
+    <text x="290" y="154" font-size="10.5" fill="#475569">• Unread Counter &amp; Mark-Read API</text>
+    <text x="290" y="170" font-size="10.5" fill="#475569">• Message History Store / Fetch</text>
+
+    <!-- Submodule 3: Channel Connectors & Ingestion -->
+    <rect x="560" y="38" width="270" height="182" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="570" y="56" font-size="12" font-weight="700" fill="#0F172A">Channel Ingestion Engine</text>
+    <text x="570" y="74" font-size="10.5" fill="#475569">• Meta Webhook Receiver (SHA256)</text>
+    <text x="570" y="90" font-size="10.5" fill="#475569">• Page ID to Business Identifier</text>
+    <text x="570" y="106" font-size="10.5" fill="#475569">• Background Email Poller (IMAP 30s)</text>
+    <text x="570" y="122" font-size="10.5" fill="#475569">• MIME Parser &amp; Attachment Saver</text>
+    <text x="570" y="138" font-size="10.5" fill="#475569">• Email Dispatch Service (SMTP TLS)</text>
+    <text x="570" y="154" font-size="10.5" fill="#475569">• Meta Graph API Sender (v18.0)</text>
+    <text x="570" y="170" font-size="10.5" fill="#475569">• Background Tasks Pipeline</text>
+
+    <!-- Submodule 4: Document & Knowledge Processing -->
+    <rect x="845" y="38" width="250" height="182" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="855" y="56" font-size="12" font-weight="700" fill="#0F172A">Document Ingestion Pipeline</text>
+    <text x="855" y="74" font-size="10.5" fill="#475569">• PyMuPDF (fitz) Text Extractor</text>
+    <text x="855" y="90" font-size="10.5" fill="#475569">• Structured Q&amp;A Pattern Parser</text>
+    <text x="855" y="106" font-size="10.5" fill="#475569">• Sliding-Window Chunker (500w/50o)</text>
+    <text x="855" y="122" font-size="10.5" fill="#475569">• Chunk Metadata Enrichment</text>
+    <text x="855" y="138" font-size="10.5" fill="#475569">• Batch Vector Embedding Generator</text>
+    <text x="855" y="154" font-size="10.5" fill="#475569">• PostgreSQL Chunk Metadata Store</text>
+    <text x="855" y="170" font-size="10.5" fill="#475569">• Qdrant Vector Upsert Handler</text>
+
+    <!-- Submodule 5: WebSocket & Analytics Services -->
+    <rect x="1110" y="38" width="245" height="182" rx="6" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2"/>
+    <text x="1120" y="56" font-size="12" font-weight="700" fill="#0F172A">Internal WS &amp; Analytics</text>
+    <text x="1120" y="74" font-size="10.5" fill="#475569">• WebSocket ConnectionManager</text>
+    <text x="1120" y="90" font-size="10.5" fill="#475569">• In-Memory Peer Broadcast</text>
+    <text x="1120" y="106" font-size="10.5" fill="#475569">• Staff Presence &amp; Heartbeat</text>
+    <text x="1120" y="122" font-size="10.5" fill="#475569">• Analytics Aggregation Engine</text>
+    <text x="1120" y="138" font-size="10.5" fill="#475569">• Sentiment Volume Aggregation</text>
+    <text x="1120" y="154" font-size="10.5" fill="#475569">• First-Response Time (FRT) Metrics</text>
+    <text x="1120" y="170" font-size="10.5" fill="#475569">• Preflight Health System Check</text>
+  </g>
+
+  <!-- Flow Arrows: Backend to AI/RAG Layer and Data Layer -->
+  <line x1="700" y1="665" x2="700" y2="700" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <text x="710" y="687" font-size="10.5" font-weight="600" fill="#7C3AED">Incoming Message / Query &amp; Document Chunks</text>
+
+  <!-- ==================== LAYER 3: AI & RAG ORCHESTRATION LAYER ==================== -->
+  <g transform="translate(55, 705)">
+    <rect x="0" y="0" width="1370" height="175" rx="8" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect x="0" y="0" width="1370" height="28" rx="8" fill="#F3E8FF" stroke="#A855F7" stroke-width="1.5"/>
+    <path d="M 0 20 L 0 28 L 1370 28 L 1370 20 Z" fill="#F3E8FF"/>
+    <text x="15" y="19" font-size="12.5" font-weight="700" fill="#581C87">3. AI &amp; RAG ORCHESTRATION LAYER (Multilingual RAG • NLP • Multi-Model Gateway)</text>
+    <text x="1355" y="19" font-size="11" font-weight="600" fill="#7E22CE" text-anchor="end">Dynamic Multilingual Normalization, Vector Retrieval &amp; Fallback Gateway</text>
+
+    <!-- Component 1: Sentiment & Language NLP -->
+    <rect x="15" y="36" width="250" height="125" rx="6" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.2"/>
+    <text x="25" y="54" font-size="12" font-weight="700" fill="#581C87">1. NLP &amp; Sentiment Engine</text>
+    <text x="25" y="72" font-size="10.5" fill="#475569">• Hugging Face Multilingual DistilBERT</text>
+    <text x="25" y="88" font-size="10.5" fill="#475569">• Lexicon-Augmented Nepali Classifier</text>
+    <text x="25" y="104" font-size="10.5" fill="#475569">• Output: positive | neutral | negative</text>
+    <text x="25" y="120" font-size="10.5" fill="#475569">• Romanized Nepali Normalizer</text>
+    <text x="25" y="136" font-size="10.5" fill="#475569">• Dynamic Language Identifier</text>
+
+    <!-- Component 2: Multilingual Vector Embeddings -->
+    <rect x="280" y="36" width="265" height="125" rx="6" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.2"/>
+    <text x="290" y="54" font-size="12" font-weight="700" fill="#581C87">2. Embedding Pipeline</text>
+    <text x="290" y="72" font-size="10.5" fill="#475569">• Model: intfloat/multilingual-e5-large</text>
+    <text x="290" y="88" font-size="10.5" fill="#475569">• Embedding Dimension: 1024-d</text>
+    <text x="290" y="104" font-size="10.5" fill="#475569">• Query Prefix: "query: &lt;text&gt;"</text>
+    <text x="290" y="120" font-size="10.5" fill="#475569">• Document Prefix: "passage: &lt;text&gt;"</text>
+    <text x="290" y="136" font-size="10.5" fill="#475569">• Cross-Lingual Semantic Alignment</text>
+
+    <!-- Component 3: Multi-Tenant RAG Orchestrator -->
+    <rect x="560" y="36" width="270" height="125" rx="6" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.2"/>
+    <text x="570" y="54" font-size="12" font-weight="700" fill="#581C87">3. Multi-Tenant RAG Service</text>
+    <text x="570" y="72" font-size="10.5" fill="#475569">• Tenant Qdrant Collection Resolver</text>
+    <text x="570" y="88" font-size="10.5" fill="#475569">• Cosine Similarity Search (Top-K=5)</text>
+    <text x="570" y="104" font-size="10.5" fill="#475569">• Strict Score Threshold (τ = 0.45)</text>
+    <text x="570" y="120" font-size="10.5" fill="#475569">• Conversation Memory History (10 msgs)</text>
+    <text x="570" y="136" font-size="10.5" fill="#475569">• Anti-Hallucination Safe Fallback</text>
+
+    <!-- Component 4: Unified Prompt Engineering -->
+    <rect x="845" y="36" width="250" height="125" rx="6" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.2"/>
+    <text x="855" y="54" font-size="12" font-weight="700" fill="#581C87">4. Prompt Engineering System</text>
+    <text x="855" y="72" font-size="10.5" fill="#475569">• Dynamic Context Construction</text>
+    <text x="855" y="88" font-size="10.5" fill="#475569">• Business Identity &amp; Tone Ingestion</text>
+    <text x="855" y="104" font-size="10.5" fill="#475569">• Sentiment &amp; Language Tuning</text>
+    <text x="855" y="120" font-size="10.5" fill="#475569">• Channel-Specific Reply Formatting</text>
+    <text x="855" y="136" font-size="10.5" fill="#475569">• Signature &amp; Plain-Text Formatter</text>
+
+    <!-- Component 5: LiteLLM Multi-Provider Gateway -->
+    <rect x="1110" y="36" width="245" height="125" rx="6" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.2"/>
+    <text x="1120" y="54" font-size="12" font-weight="700" fill="#581C87">5. LiteLLM Multi-Gateway</text>
+    <text x="1120" y="72" font-size="10.5" fill="#475569">• Primary Model: Groq / Qwen 2.5</text>
+    <text x="1120" y="88" font-size="10.5" fill="#475569">• Fallback 1: Gemini 2.0 Flash</text>
+    <text x="1120" y="104" font-size="10.5" fill="#475569">• Fallback 2: OpenRouter / Ollama</text>
+    <text x="1120" y="120" font-size="10.5" fill="#475569">• Automatic Rate-Limit &amp; Timeout Retry</text>
+    <text x="1120" y="136" font-size="10.5" fill="#475569">• &lt;think&gt; Reasoning Tag Stripper</text>
+  </g>
+
+  <!-- Flow Arrows: AI/RAG to Data Layer -->
+  <line x1="700" y1="880" x2="700" y2="915" stroke="#475569" stroke-width="2" marker-end="url(#arrow-slate)"/>
+  <text x="710" y="902" font-size="10.5" font-weight="600" fill="#475569">Tenant Vector Search &amp; Relational Queries</text>
+
+  <!-- ==================== LAYER 4: DATA & PERSISTENCE LAYER ==================== -->
+  <g transform="translate(55, 920)">
+    <rect x="0" y="0" width="1370" height="180" rx="8" fill="#FFFFFF" stroke="#475569" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect x="0" y="0" width="1370" height="28" rx="8" fill="#F8FAFC" stroke="#475569" stroke-width="1.5"/>
+    <path d="M 0 20 L 0 28 L 1370 28 L 1370 20 Z" fill="#F8FAFC"/>
+    <text x="15" y="19" font-size="12.5" font-weight="700" fill="#1E293B">4. DATA &amp; STORAGE LAYER (Relational Database • Dedicated Vector Store • File Storage)</text>
+    <text x="1355" y="19" font-size="11" font-weight="600" fill="#64748B" text-anchor="end">Strict Multi-Tenant Row &amp; Vector Collection Isolation</text>
+
+    <!-- Storage Block 1: PostgreSQL Relational DB -->
+    <rect x="15" y="36" width="640" height="130" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="25" y="54" font-size="12" font-weight="700" fill="#0F172A">🗄️ PostgreSQL Relational Database (SQLAlchemy ORM)</text>
+    <text x="25" y="73" font-size="10.5" fill="#334155"><tspan font-weight="600">Core Entities:</tspan> businesses (tenant config, mode: auto/review), users (credentials, roles: admin/agent), invitations</text>
+    <text x="25" y="90" font-size="10.5" fill="#334155"><tspan font-weight="600">Messaging Entities:</tspan> customers (profiles, tags), customer_identities (cross-platform IDs), conversations, messages</text>
+    <text x="25" y="107" font-size="10.5" fill="#334155"><tspan font-weight="600">Integrations &amp; Knowledge:</tspan> integrations (encrypted credentials, page IDs), knowledge_documents, knowledge_chunks</text>
+    <text x="25" y="124" font-size="10.5" fill="#334155"><tspan font-weight="600">Internal Collaboration:</tspan> internal_threads, internal_thread_participants, internal_messages</text>
+    <text x="25" y="145" font-size="10.5" font-weight="600" fill="#2563EB">🔒 Security: Every query strictly filtered by authenticated user's business_id (Multi-Tenant Isolation)</text>
+
+    <!-- Storage Block 2: Qdrant Vector Store -->
+    <rect x="670" y="36" width="465" height="130" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="680" y="54" font-size="12" font-weight="700" fill="#0F172A">⚡ Qdrant Vector Database (Vector Engine)</text>
+    <text x="680" y="73" font-size="10.5" fill="#334155"><tspan font-weight="600">Deployment:</tspan> Qdrant Server (:6333) / Embedded storage (./qdrant_storage)</text>
+    <text x="680" y="90" font-size="10.5" fill="#334155"><tspan font-weight="600">Collection Naming:</tspan> haqdesk_business_{business_id} (Per-tenant isolated collections)</text>
+    <text x="680" y="107" font-size="10.5" fill="#334155"><tspan font-weight="600">Vector Properties:</tspan> 1024-dim Cosine Distance vectors</text>
+    <text x="680" y="124" font-size="10.5" fill="#334155"><tspan font-weight="600">Payload Metadata:</tspan> {business_id, document_id, chunk_id, content, page_number, filename}</text>
+    <text x="680" y="145" font-size="10.5" font-weight="600" fill="#059669">🔒 Strict Tenant Cosine Similarity Filter on Search</text>
+
+    <!-- Storage Block 3: Local Storage -->
+    <rect x="1150" y="36" width="205" height="130" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="1160" y="54" font-size="12" font-weight="700" fill="#0F172A">📁 Local File Storage</text>
+    <text x="1160" y="75" font-size="10.5" fill="#475569">• /uploads/knowledge</text>
+    <text x="1160" y="95" font-size="10.5" fill="#475569">• /uploads/attachments</text>
+    <text x="1160" y="115" font-size="10.5" fill="#475569">• FastStatic mounting</text>
+    <text x="1160" y="135" font-size="10.5" fill="#475569">• Raw ingestion files</text>
+  </g>
+
+  <!-- ==================== RIGHT SIDE: EXTERNAL INTEGRATIONS & LLM PROVIDERS ==================== -->
+
+  <!-- EXTERNAL INTEGRATION LAYER CONTAINER -->
+  <rect x="1500" y="242" width="465" height="495" rx="10" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5" filter="url(#shadow-md)"/>
+  <rect x="1500" y="242" width="465" height="28" rx="10" fill="#F0F9FF" stroke="#0284C7" stroke-width="1.5"/>
+  <path d="M 1500 262 L 1500 270 L 1965 270 L 1965 262 Z" fill="#F0F9FF"/>
+  <text x="1515" y="261" font-size="12.5" font-weight="700" fill="#0369A1">EXTERNAL COMMUNICATION &amp; INTEGRATION LAYER</text>
+
+  <!-- 1. Active Demonstration Channels (Current FYP) -->
+  <rect x="1515" y="280" width="435" height="258" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="1530" y="300" font-size="12" font-weight="700" fill="#15803D">ACTIVE FYP DEMONSTRATION CHANNELS</text>
+  <text x="1530" y="316" font-size="10.5" fill="#166534">Fully integrated &amp; verified in current testbed</text>
+
+  <!-- Channel 1: Facebook Messenger -->
+  <rect x="1530" y="324" width="405" height="60" rx="4" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1"/>
+  <text x="1540" y="342" font-size="11.5" font-weight="700" fill="#166534">📘 Facebook Messenger</text>
+  <text x="1540" y="358" font-size="10" fill="#475569">• Inbound: Meta Webhook Event (via ngrok public tunnel)</text>
+  <text x="1540" y="372" font-size="10" fill="#475569">• Outbound: Meta Graph API v18.0 (/messages with Page Token)</text>
+
+  <!-- Channel 2: Instagram Direct -->
+  <rect x="1530" y="390" width="405" height="60" rx="4" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1"/>
+  <text x="1540" y="408" font-size="11.5" font-weight="700" fill="#166534">📸 Instagram Direct Messaging</text>
+  <text x="1540" y="424" font-size="10" fill="#475569">• Inbound: Linked Facebook Page Webhook Router</text>
+  <text x="1540" y="438" font-size="10" fill="#475569">• Outbound: Meta Graph API v18.0 (/messages with Instagram ID)</text>
+
+  <!-- Channel 3: Gmail Email -->
+  <rect x="1530" y="456" width="405" height="70" rx="4" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1"/>
+  <text x="1540" y="474" font-size="11.5" font-weight="700" fill="#166534">✉️ Gmail (Customer &amp; Business Email)</text>
+  <text x="1540" y="490" font-size="10" fill="#475569">• Inbound: IMAP Poller Thread (imap.gmail.com:993 SSL, 30s)</text>
+  <text x="1540" y="504" font-size="10" fill="#475569">• Outbound: SMTP Mail Service (smtp.gmail.com:587 TLS)</text>
+  <text x="1540" y="518" font-size="10" fill="#475569">• Auth: Encrypted Google App Passwords / OAuth2</text>
+
+  <!-- 2. Extensible Future Channels (Dashed Boundary) -->
+  <rect x="1515" y="546" width="435" height="175" rx="6" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="1530" y="566" font-size="12" font-weight="700" fill="#B45309">EXTENSIBLE INTEGRATION ARCHITECTURE</text>
+  <text x="1530" y="581" font-size="10" fill="#92400E">* Architectural design ready; requires business verification</text>
+
+  <!-- Extensible Channel 1: WhatsApp -->
+  <rect x="1530" y="590" width="405" height="52" rx="4" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="1540" y="606" font-size="11" font-weight="700" fill="#92400E">💬 WhatsApp Business Platform (Extension Ready)</text>
+  <text x="1540" y="620" font-size="9.5" fill="#78350F">• Cloud API webhook schema implemented in codebase</text>
+  <text x="1540" y="632" font-size="9.5" fill="#78350F">• Requires Meta Business Verification &amp; Official Phone Number</text>
+
+  <!-- Extensible Channel 2: Custom Connectors -->
+  <rect x="1530" y="648" width="405" height="62" rx="4" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="1540" y="664" font-size="11" font-weight="700" fill="#92400E">🔌 Future Channel Connectors (Pluggable API)</text>
+  <text x="1540" y="678" font-size="9.5" fill="#78350F">• Webhook Connector SDK (Custom Web Chat / Mobile Apps)</text>
+  <text x="1540" y="690" font-size="9.5" fill="#78350F">• SMS Gateways (Twilio) &amp; Third-Party CRM Integrations</text>
+  <text x="1540" y="702" font-size="9.5" fill="#78350F">• Standardized Integration DB interface &amp; schema</text>
+
+  <!-- EXTERNAL LLM & AI PROVIDERS CONTAINER -->
+  <g transform="translate(1500, 750)">
+    <rect x="0" y="0" width="465" height="350" rx="10" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5" filter="url(#shadow-md)"/>
+    <rect x="0" y="0" width="465" height="28" rx="10" fill="#FAF5FF" stroke="#7C3AED" stroke-width="1.5"/>
+    <path d="M 0 20 L 0 28 L 465 28 L 465 20 Z" fill="#FAF5FF"/>
+    <text x="15" y="19" font-size="12.5" font-weight="700" fill="#581C87">EXTERNAL AI &amp; FOUNDATION MODEL PROVIDERS</text>
+
+    <!-- Provider 1: Groq Qwen -->
+    <rect x="15" y="38" width="435" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="25" y="56" font-size="11.5" font-weight="700" fill="#0F172A">⚡ Groq Cloud LPU Inference (Primary Provider)</text>
+    <text x="25" y="73" font-size="10.5" fill="#475569">• Primary Model: groq/qwen/qwen3.6-27b (Fast inference)</text>
+    <text x="25" y="88" font-size="10.5" fill="#475569">• Low-latency streaming &amp; high multilingual coherence</text>
+
+    <!-- Provider 2: Google Gemini -->
+    <rect x="15" y="106" width="435" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="25" y="124" font-size="11.5" font-weight="700" fill="#0F172A">✨ Google Gemini API (Secondary Fallback)</text>
+    <text x="25" y="141" font-size="10.5" fill="#475569">• Model: gemini/gemini-2.0-flash</text>
+    <text x="25" y="156" font-size="10.5" fill="#475569">• High context window &amp; complex reasoning fallback</text>
+
+    <!-- Provider 3: OpenRouter / DeepSeek -->
+    <rect x="15" y="174" width="435" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="25" y="192" font-size="11.5" font-weight="700" fill="#0F172A">🌐 OpenRouter / Remote LLMs (Tertiary Fallback)</text>
+    <text x="25" y="209" font-size="10.5" fill="#475569">• Backup Models: openai/gpt-oss-120b, DeepSeek-V3</text>
+    <text x="25" y="224" font-size="10.5" fill="#475569">• Dynamic routing across global AI inference APIs</text>
+
+    <!-- Provider 4: Local Ollama -->
+    <rect x="15" y="242" width="435" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="25" y="260" font-size="11.5" font-weight="700" fill="#0F172A">🦙 Local Ollama Server (Offline / Privacy Mode)</text>
+    <text x="25" y="277" font-size="10.5" fill="#475569">• Local Models: gemma3:1b, llama3.2:3b via http://localhost:11434</text>
+    <text x="25" y="292" font-size="10.5" fill="#475569">• Zero-cloud latency for air-gapped development</text>
+
+    <!-- Model Auto-Switching Info -->
+    <rect x="15" y="310" width="435" height="28" rx="4" fill="#FEF2F2" stroke="#F87171" stroke-width="1"/>
+    <text x="25" y="328" font-size="10" font-weight="600" fill="#991B1B">🔄 LiteLLM Failover: Auto-switches provider upon 429 Rate-Limit / 503 Outage</text>
+  </g>
+
+  <!-- ==================== ARROWS & INTERCONNECTION LINES ==================== -->
+
+  <!-- Customer to Channels Flow -->
+  <path d="M 1730 213 L 1730 280" fill="none" stroke="#D97706" stroke-width="2" marker-end="url(#arrow-amber)"/>
+  <text x="1740" y="235" font-size="10.5" font-weight="600" fill="#D97706">Sends message via FB/IG/Gmail</text>
+
+  <!-- Active Channels to Backend Webhook Engine -->
+  <path d="M 1515 365 L 1445 365" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <rect x="1448" y="353" width="54" height="24" rx="4" fill="#ECFDF5" stroke="#059669" stroke-width="1"/>
+  <text x="1475" y="369" font-size="9.5" font-weight="700" fill="#065F46" text-anchor="middle">Inbound</text>
+
+  <!-- Backend to Active Channels (Outbound Responses) -->
+  <path d="M 1445 425 L 1515 425" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <rect x="1448" y="413" width="54" height="24" rx="4" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
+  <text x="1475" y="429" font-size="9.5" font-weight="700" fill="#1E40AF" text-anchor="middle">Outbound</text>
+
+  <!-- AI Gateway to External LLM Providers -->
+  <path d="M 1425 780 L 1500 780" fill="none" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <rect x="1433" y="768" width="58" height="24" rx="4" fill="#FAF5FF" stroke="#7C3AED" stroke-width="1"/>
+  <text x="1462" y="784" font-size="9.5" font-weight="700" fill="#581C87" text-anchor="middle">Prompt</text>
+
+  <path d="M 1500 815 L 1425 815" fill="none" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <rect x="1433" y="803" width="58" height="24" rx="4" fill="#FAF5FF" stroke="#7C3AED" stroke-width="1"/>
+  <text x="1462" y="819" font-size="9.5" font-weight="700" fill="#581C87" text-anchor="middle">AI Draft</text>
+
+  <!-- ==================== BOTTOM / FOOTER LEGEND ==================== -->
+  <rect x="35" y="1135" width="1930" height="55" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="50" y="1167" font-size="12.5" font-weight="700" fill="#0F172A">DIAGRAM LEGEND:</text>
+
+  <!-- Legend Items -->
+  <rect x="180" y="1152" width="16" height="16" rx="3" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.2"/>
+  <text x="205" y="1165" font-size="11.5" fill="#334155">HaqDesk Core Component</text>
+
+  <rect x="390" y="1152" width="16" height="16" rx="3" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.2"/>
+  <text x="415" y="1165" font-size="11.5" fill="#334155">AI / RAG / NLP Engine</text>
+
+  <rect x="580" y="1152" width="16" height="16" rx="3" fill="#F8FAFC" stroke="#475569" stroke-width="1.2"/>
+  <text x="605" y="1165" font-size="11.5" fill="#334155">Persistence / Storage Store</text>
+
+  <rect x="790" y="1152" width="16" height="16" rx="3" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.2"/>
+  <text x="815" y="1165" font-size="11.5" fill="#334155">Active FYP Demo Channel</text>
+
+  <rect x="1000" y="1152" width="16" height="16" rx="3" fill="#FFFBEB" stroke="#D97706" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="1025" y="1165" font-size="11.5" fill="#334155">Extensible / Future Capability (Unverified in Testbed)</text>
+
+  <line x1="1350" y1="1160" x2="1385" y2="1160" stroke="#2563EB" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="1395" y="1165" font-size="11.5" fill="#334155">Synchronous HTTPS / REST / Data Flow</text>
+
+  <line x1="1660" y1="1160" x2="1695" y2="1160" stroke="#059669" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <text x="1705" y="1165" font-size="11.5" fill="#334155">Inbound Webhook / WebSocket / Polling Flow</text>
+
+</svg>
+"""
+    
+    # Save SVG file
+    svg_path = "haqdesk_system_architecture.svg"
+    with open(svg_path, "w", encoding="utf-8") as f:
+        f.write(svg)
+    print(f"Saved SVG to {svg_path}")
+
+    # Render ultra-high resolution PNG (300 DPI) using PyMuPDF
+    doc = fitz.open(svg_path)
+    page = doc[0]
+    pix = page.get_pixmap(dpi=300)
+    png_path = "haqdesk_system_architecture.png"
+    pix.save(png_path)
+    print(f"Rendered High-Resolution 300 DPI PNG ({pix.width}x{pix.height}) to {png_path}")
+
+    # Also save a copy to the artifacts directory
+    artifact_dir = r"C:\Users\A S U S\.gemini\antigravity-ide\brain\6b2e3147-2ca4-4db9-917f-2190bcd40cbf"
+    os.makedirs(artifact_dir, exist_ok=True)
+    with open(os.path.join(artifact_dir, "haqdesk_system_architecture.svg"), "w", encoding="utf-8") as f:
+        f.write(svg)
+    pix.save(os.path.join(artifact_dir, "haqdesk_system_architecture.png"))
+    print("Saved copy to artifacts directory")
+
+    # Also update mermaid file with matching architecture
+    mmd = """flowchart TB
+    %% Styling Classes
+    classDef actor fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+    classDef externalActor fill:#FEF3C7,stroke:#F59E0B,stroke-width:2px,color:#78350F;
+    classDef presentation fill:#FFFFFF,stroke:#94A3B8,stroke-width:2px,color:#0F172A;
+    classDef backend fill:#FFFFFF,stroke:#64748B,stroke-width:2px,color:#0F172A;
+    classDef ai fill:#FAF5FF,stroke:#A855F7,stroke-width:2px,color:#581C87;
+    classDef data fill:#F8FAFC,stroke:#475569,stroke-width:2px,color:#0F172A;
+    classDef activeChannel fill:#F0FDF4,stroke:#16A34A,stroke-width:2px,color:#14532D;
+    classDef extChannel fill:#FFFBEB,stroke:#D97706,stroke-width:2px,stroke-dasharray:5 4,color:#78350F;
+    classDef llm fill:#FAF5FF,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
+
+    subgraph ACTORS["System Actors"]
+        Admin["Business Admin / Super Admin"]:::actor
+        Staff["Support Staff (Supervisor / Agent)"]:::actor
+        Customer["End Customer (External User)"]:::externalActor
+    end
+
+    subgraph PRESENTATION["Presentation Layer (Next.js 15 + TypeScript)"]
+        AuthUI["Auth & Onboarding UI"]:::presentation
+        InboxUI["Unified Inbox Workspace"]:::presentation
+        AICopilotUI["AI Draft Review Interface"]:::presentation
+        KnowledgeUI["Knowledge Base Management UI"]:::presentation
+        InternalChatUI["WebSocket Internal Chat UI"]:::presentation
+        AnalyticsUI["Analytics & SLA Dashboard"]:::presentation
+    end
+
+    subgraph APPLICATION["Application Layer (FastAPI Backend Core)"]
+        AuthService["Auth & Security Engine (JWT + RBAC + Tenant Guard)"]:::backend
+        InboxService["Unified Inbox & Customer Management Service"]:::backend
+        ChannelIngestion["Webhook & IMAP Ingestion Engine (Meta + Gmail)"]:::backend
+        DocProcessor["Document Ingestion Pipeline (PyMuPDF + Q&A Chunker)"]:::backend
+        WSManager["WebSocket Connection Manager (Internal Messaging)"]:::backend
+        AnalyticsService["Tenant Analytics & Aggregation Service"]:::backend
+        OutboundDispatcher["Outbound Reply Dispatcher (Graph API / SMTP)"]:::backend
+    end
+
+    subgraph AI_RAG["AI & RAG Orchestration Layer"]
+        SentimentNLP["Sentiment (DistilBERT) & Nepali Normalizer"]:::ai
+        EmbeddingModel["Multilingual E5 Embedding Model (1024-d)"]:::ai
+        RAGOrchestrator["Multi-Tenant RAG Service (Score Threshold = 0.45)"]:::ai
+        PromptBuilder["Unified Context & Prompt Assembly"]:::ai
+        LiteLLMGateway["LiteLLM Multi-Provider Fallback Gateway"]:::ai
+    end
+
+    subgraph PERSISTENCE["Data & Storage Layer"]
+        PostgreSQL[("PostgreSQL (Relational Tenant Database)")]:::data
+        Qdrant[("Qdrant (Multi-Tenant Vector Collections)")]:::data
+        LocalStorage["Local File Storage (/uploads)"]:::data
+    end
+
+    subgraph EXTERNAL_CHANNELS["External Communication Channels"]
+        subgraph ACTIVE_DEMO["Active FYP Demonstration Channels"]
+            FB["Facebook Messenger (Meta Webhook + Graph API)"]:::activeChannel
+            IG["Instagram Direct (Linked Page Webhook + Graph API)"]:::activeChannel
+            Gmail["Gmail (IMAP Polling SSL + SMTP TLS)"]:::activeChannel
+        end
+        subgraph EXTENSIBLE["Extensible / Future Channels"]
+            WA["WhatsApp Business API (Extension Ready)"]:::extChannel
+            CustomConnectors["Pluggable Webhook / LiveChat SDK"]:::extChannel
+        end
+    end
+
+    subgraph LLM_PROVIDERS["External AI / LLM Providers"]
+        Groq["Groq Cloud LPU (Qwen 2.5 Primary)"]:::llm
+        Gemini["Google Gemini API (2.0 Flash Fallback)"]:::llm
+        Ollama["Local Ollama Server (Local Fallback)"]:::llm
+    end
+
+    %% User interactions
+    Admin -->|HTTPS / JWT| AuthUI
+    Admin -->|HTTPS / JWT| KnowledgeUI
+    Staff -->|HTTPS / JWT| InboxUI
+    Staff -->|Review / Approve Draft| AICopilotUI
+    Staff <-->|WebSocket| InternalChatUI
+    Customer -->|Native Messages| FB
+    Customer -->|Native Messages| IG
+    Customer -->|Native Messages| Gmail
+    Customer -.->|Future Native Messages| WA
+
+    %% Presentation to Application
+    AuthUI & InboxUI & AICopilotUI & KnowledgeUI & AnalyticsUI -->|REST API Requests (JWT)| AuthService
+    AuthService --> InboxService
+    InternalChatUI <-->|WebSocket Stream| WSManager
+
+    %% External Channels to Backend
+    FB & IG -->|Meta Webhooks via ngrok| ChannelIngestion
+    Gmail -->|IMAP Poll (every 30s)| ChannelIngestion
+    OutboundDispatcher -->|Graph API POST| FB
+    OutboundDispatcher -->|Graph API POST| IG
+    OutboundDispatcher -->|SMTP TLS Send| Gmail
+
+    %% Backend to AI/RAG
+    ChannelIngestion -->|Process Incoming Message| SentimentNLP
+    DocProcessor -->|Document Text Chunks| EmbeddingModel
+    InboxService & ChannelIngestion -->|Customer Query| RAGOrchestrator
+
+    %% AI Pipeline Flow
+    SentimentNLP --> RAGOrchestrator
+    EmbeddingModel -->|Vector Generation| RAGOrchestrator
+    RAGOrchestrator -->|Retrieved Context + History| PromptBuilder
+    PromptBuilder --> LiteLLMGateway
+    LiteLLMGateway -->|API Inference| Groq
+    LiteLLMGateway -.->|Fallback| Gemini
+    LiteLLMGateway -.->|Local Fallback| Ollama
+    LiteLLMGateway -->|AI Draft Response| AICopilotUI
+
+    %% Data Layer Access
+    AuthService & InboxService & DocProcessor & AnalyticsService <-->|SQL Queries (Tenant-Scoped)| PostgreSQL
+    EmbeddingModel -->|Batch Upsert Chunks| Qdrant
+    RAGOrchestrator <-->|Cosine Search (business_id filtered)| Qdrant
+    DocProcessor <--> LocalStorage
+"""
+    with open("haqdesk_system_architecture.mmd", "w", encoding="utf-8") as f:
+        f.write(mmd)
+    print("Updated haqdesk_system_architecture.mmd")
+
+if __name__ == "__main__":
+    generate_system_architecture()
