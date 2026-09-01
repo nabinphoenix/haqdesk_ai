@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
-# Configuration-only Elastic Beanstalk updates can replace the current
-# application directory without running the hook that creates the .venv link.
-# Recreate that link from the shared runtime when it is missing.
-if [ ! -e /var/app/current/.venv ] && [ -d /var/app/haqdesk-venv ]; then
-  ln -s /var/app/haqdesk-venv /var/app/current/.venv
-fi
 set -euo pipefail
 
 APP_ROOT="/var/app/current"
 
+if [ -x "$APP_ROOT/.venv/bin/python" ]; then
+  PYTHON_BIN="$APP_ROOT/.venv/bin/python"
+elif [ -x "/var/app/haqdesk-venv/bin/python" ]; then
+  PYTHON_BIN="/var/app/haqdesk-venv/bin/python"
+else
+  echo HaqDesk Python runtime is unavailable
+  exit 1
+fi
+
+if [ -x "$APP_ROOT/frontend/node_modules/.bin/next" ]; then
+  FRONTEND_BIN_DIR="$APP_ROOT/frontend/node_modules/.bin"
+elif [ -x "/var/app/haqdesk-frontend/node_modules/.bin/next" ]; then
+  FRONTEND_BIN_DIR="/var/app/haqdesk-frontend/node_modules/.bin"
+else
+  echo HaqDesk frontend runtime is unavailable
+  exit 1
+fi
+
 cd "$APP_ROOT/frontend"
-npm run start -- --hostname 127.0.0.1 --port 3000 &
+PATH="$FRONTEND_BIN_DIR:$PATH" npm run start -- --hostname 127.0.0.1 --port 3000 &
 FRONTEND_PID=$!
 
 cd "$APP_ROOT/backend"
-"$APP_ROOT/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+"$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
 
 cleanup() {
