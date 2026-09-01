@@ -42,15 +42,22 @@ if [ ! -x "$RUNTIME_VENV/bin/python" ]; then
   fi
 fi
 
-ln -sfn "$RUNTIME_VENV" "$APP_ROOT/.venv"
+ln -sTfn "$RUNTIME_VENV" "$APP_ROOT/.venv"
 
 # Keep frontend dependencies outside the versioned source tree as well. This
 # avoids re-downloading the same packages while the EB deployment command is
 # holding the application offline. A new instance performs one install, then
 # later version swaps reuse it.
-RUNTIME_NODE_MODULES="/var/app/haqdesk-node-modules"
+RUNTIME_NODE_MODULES="/var/app/haqdesk-frontend/node_modules"
+LEGACY_NODE_MODULES="/var/app/haqdesk-node-modules"
+mkdir -p "$(dirname "$RUNTIME_NODE_MODULES")"
 if [ ! -d "$RUNTIME_NODE_MODULES" ]; then
-  if [ -d /var/app/current/frontend/node_modules ]; then
+  # Move the first cache created by an earlier version of this hook. Keeping
+  # the final directory name as node_modules is required for Node's module
+  # resolver to find Next.js' sibling dependencies.
+  if [ -d "$LEGACY_NODE_MODULES" ]; then
+    mv "$LEGACY_NODE_MODULES" "$RUNTIME_NODE_MODULES"
+  elif [ -d /var/app/current/frontend/node_modules ]; then
     mv /var/app/current/frontend/node_modules "$RUNTIME_NODE_MODULES"
   else
     npm --prefix "$APP_ROOT/frontend" ci --no-audit --no-fund || npm --prefix "$APP_ROOT/frontend" install --no-audit --no-fund
@@ -58,4 +65,4 @@ if [ ! -d "$RUNTIME_NODE_MODULES" ]; then
   fi
 fi
 
-ln -sfn "$RUNTIME_NODE_MODULES" "$APP_ROOT/frontend/node_modules"
+ln -sTfn "$RUNTIME_NODE_MODULES" "$APP_ROOT/frontend/node_modules"
