@@ -65,7 +65,7 @@ jobs:
 
       - name: Prepare Elastic Beanstalk bundle
         run: |
-          chmod +x scripts/start-eb.sh .platform/hooks/prebuild/10_install_runtime_dependencies.sh
+          chmod +x scripts/start-eb.sh .platform/hooks/prebuild/10_install_runtime_dependencies.sh .platform/hooks/predeploy/10_install_runtime_dependencies.sh
           mkdir -p deploy
           rsync -a --exclude='.git' --exclude='.github' --exclude='.codex' --exclude='deploy' --exclude='node_modules' --exclude='.venv' --exclude='backend/venv' ./ deploy/
           cd deploy
@@ -93,10 +93,22 @@ jobs:
       - name: Deploy to Elastic Beanstalk
         run: |
           set -euo pipefail
-          aws elasticbeanstalk update-environment \
-            --application-name "$EB_APPLICATION_NAME" \
-            --environment-name "$EB_ENVIRONMENT_NAME" \
-            --version-label "haqdesk-${GITHUB_SHA}"
+          update_succeeded=false
+          for update_attempt in $(seq 1 5); do
+            if aws elasticbeanstalk update-environment \
+              --application-name "$EB_APPLICATION_NAME" \
+              --environment-name "$EB_ENVIRONMENT_NAME" \
+              --version-label "haqdesk-${GITHUB_SHA}"; then
+              update_succeeded=true
+              break
+            fi
+            echo "Elastic Beanstalk update was not accepted (attempt ${update_attempt}/5); retrying."
+            sleep 30
+          done
+          if [ "$update_succeeded" != true ]; then
+            echo "Elastic Beanstalk did not accept the application update."
+            exit 1
+          fi
 
           # The EB hook installs the CPU-only ML runtime and can take longer
           # than the AWS CLI waiter's default ten-minute limit on t3.small.
