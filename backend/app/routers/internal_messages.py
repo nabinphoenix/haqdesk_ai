@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,11 +14,13 @@ from app.models.internal_messaging import InternalMessage, InternalThread, Inter
 from app.models.user import User
 
 router = APIRouter(prefix="/internal-messages", tags=["internal-messages"])
-ALLOWED_ROLES = {"business_admin", "supervisor", "agent"}
+ALLOWED_ROLES = {"business_admin", "supervisor", "agent", "super_admin"}
+EMPLOYEE_ROLES = {"supervisor", "agent"}
 RECIPIENT_ROLES = {
     "business_admin": {"supervisor", "agent"},
     "supervisor": {"business_admin", "agent"},
     "agent": {"business_admin", "supervisor"},
+    "super_admin": {"business_admin"},
 }
 
 
@@ -31,17 +33,22 @@ class MessageCreate(BaseModel):
 
 
 def require_messaging_user(user: User) -> None:
-    if user.role not in ALLOWED_ROLES or not user.business_id:
+    if user.role not in ALLOWED_ROLES:
+        raise HTTPException(403, "Internal messaging is unavailable for this account")
+    if user.role != "super_admin" and not user.business_id:
         raise HTTPException(403, "Internal messaging is unavailable for this account")
 
 
 def participant_thread(db: Session, user: User, thread_id: int) -> InternalThread:
     # Both tenant and membership are part of this query. A guessed foreign-tenant
     # thread ID is therefore indistinguishable from a missing thread.
-    thread = (db.query(InternalThread).join(InternalThreadParticipant)
-        .filter(InternalThread.id == thread_id,
-                InternalThread.business_id == user.business_id,
-                InternalThreadParticipant.user_id == user.id).first())
+    filters = [
+        InternalThread.id == thread_id,
+        InternalThreadParticipant.user_id == user.id,
+    ]
+    if user.role != "super_admin":
+        filters.append(InternalThread.business_id == user.business_id)
+    thread = db.query(InternalThread).join(InternalThreadParticipant).filter(*filters).first()
     if not thread:
         raise HTTPException(404, "Thread not found")
     return thread
@@ -59,28 +66,50 @@ def message_json(message: InternalMessage, sender: User):
 @router.get("/recipients")
 def recipients(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_messaging_user(current_user)
-    return [user_json(u) for u in db.query(User).filter(
-        User.business_id == current_user.business_id,
-        User.role.in_(RECIPIENT_ROLES[current_user.role]),
-        User.id != current_user.id,
-    ).order_by(User.name).all()]
+    query = db.query(User).filter(User.id != current_user.id)
+    if current_user.role == "super_admin":
+        query = query.filter(User.role == "business_admin")
+    elif current_user.role == "business_admin":
+        query = query.filter(or_(
+            and_(User.business_id == current_user.business_id, User.role.in_(EMPLOYEE_ROLES)),
+            User.role == "super_admin",
+        ))
+    else:
+        query = query.filter(
+            User.business_id == current_user.business_id,
+            User.role.in_(RECIPIENT_ROLES[current_user.role]),
+        )
+    return [user_json(u) for u in query.order_by(User.name).all()]
 
 
 @router.post("/threads", status_code=201)
 def create_thread(body: ThreadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_messaging_user(current_user)
-    recipient = db.query(User).filter(User.id == body.recipient_id,
-        User.business_id == current_user.business_id,
-        User.role.in_(RECIPIENT_ROLES[current_user.role])).first()
+    recipient = db.query(User).filter(User.id == body.recipient_id).first()
     if not recipient:
         raise HTTPException(403, "Recipient is not permitted")
+
+    thread_business_id = current_user.business_id
+    if current_user.role == "super_admin":
+        if recipient.role != "business_admin" or not recipient.business_id:
+            raise HTTPException(403, "Recipient is not permitted")
+        thread_business_id = recipient.business_id
+    elif recipient.role == "super_admin":
+        if current_user.role != "business_admin":
+            raise HTTPException(403, "Recipient is not permitted")
+    elif (
+        recipient.business_id != current_user.business_id
+        or recipient.role not in RECIPIENT_ROLES[current_user.role]
+    ):
+        raise HTTPException(403, "Recipient is not permitted")
+
     mine = db.query(InternalThreadParticipant.thread_id).filter(InternalThreadParticipant.user_id == current_user.id).subquery()
     existing = (db.query(InternalThread).join(InternalThreadParticipant)
-        .filter(InternalThread.business_id == current_user.business_id,
+        .filter(InternalThread.business_id == thread_business_id,
                 InternalThread.id.in_(mine), InternalThreadParticipant.user_id == recipient.id).first())
     if existing:
         return {"id": existing.id}
-    thread = InternalThread(business_id=current_user.business_id)
+    thread = InternalThread(business_id=thread_business_id)
     db.add(thread); db.flush()
     db.add_all([InternalThreadParticipant(thread_id=thread.id, user_id=current_user.id),
                 InternalThreadParticipant(thread_id=thread.id, user_id=recipient.id)])
@@ -88,23 +117,62 @@ def create_thread(body: ThreadCreate, db: Session = Depends(get_db), current_use
     return {"id": thread.id}
 
 
+@router.post("/threads/broadcast", status_code=201)
+def create_broadcast_thread(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_messaging_user(current_user)
+    if current_user.role != "business_admin":
+        raise HTTPException(403, "Only a business admin can message all employees")
+
+    employees = db.query(User).filter(
+        User.business_id == current_user.business_id,
+        User.role.in_(EMPLOYEE_ROLES),
+        User.id != current_user.id,
+    ).order_by(User.name).all()
+    if not employees:
+        raise HTTPException(400, "There are no supervisors or support agents in this business")
+
+    thread = InternalThread(business_id=current_user.business_id)
+    db.add(thread); db.flush()
+    db.add_all([
+        InternalThreadParticipant(thread_id=thread.id, user_id=current_user.id),
+        *[
+            InternalThreadParticipant(thread_id=thread.id, user_id=employee.id)
+            for employee in employees
+        ],
+    ])
+    db.commit(); db.refresh(thread)
+    return {"id": thread.id, "title": "All employees"}
+
+
 @router.get("/threads")
 def list_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_messaging_user(current_user)
+    thread_filters = [InternalThreadParticipant.user_id == current_user.id]
+    if current_user.role != "super_admin":
+        thread_filters.append(InternalThread.business_id == current_user.business_id)
     threads = (db.query(InternalThread).join(InternalThreadParticipant)
-        .filter(InternalThread.business_id == current_user.business_id,
-                InternalThreadParticipant.user_id == current_user.id)
+        .filter(*thread_filters)
         .order_by(InternalThread.updated_at.desc()).all())
     result = []
     for thread in threads:
         members = (db.query(User).join(InternalThreadParticipant, InternalThreadParticipant.user_id == User.id)
-                   .filter(InternalThreadParticipant.thread_id == thread.id, User.business_id == current_user.business_id).all())
+                   .filter(
+                       InternalThreadParticipant.thread_id == thread.id,
+                       or_(User.business_id == thread.business_id, User.role == "super_admin"),
+                   ).all())
         last = db.query(InternalMessage).filter(InternalMessage.thread_id == thread.id).order_by(InternalMessage.id.desc()).first()
         membership = db.query(InternalThreadParticipant).filter_by(thread_id=thread.id, user_id=current_user.id).first()
         unread = db.query(func.count(InternalMessage.id)).filter(InternalMessage.thread_id == thread.id,
             InternalMessage.sender_id != current_user.id,
             InternalMessage.created_at > (membership.last_read_at or datetime(1970, 1, 1, tzinfo=timezone.utc))).scalar()
-        result.append({"id": thread.id, "participants": [user_json(u) for u in members if u.id != current_user.id],
+        other_members = [u for u in members if u.id != current_user.id]
+        is_group = len(members) > 2
+        result.append({"id": thread.id, "title": "All employees" if is_group else None,
+                       "is_group": is_group,
+                       "participants": [user_json(u) for u in other_members],
                        "last_message": last.content if last else None, "updated_at": thread.updated_at.isoformat(), "unread_count": unread})
     return result
 
@@ -164,7 +232,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user = db.query(User).filter(User.email == payload.get("sub")).first()
-            if not user or user.role not in ALLOWED_ROLES or not user.business_id:
+            if (
+                not user
+                or user.role not in ALLOWED_ROLES
+                or (user.role != "super_admin" and not user.business_id)
+            ):
                 await websocket.close(code=1008); return
         except JWTError:
             await websocket.close(code=1008); return

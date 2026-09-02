@@ -1,6 +1,7 @@
 "use client";
 import { ThemeProvider } from "next-themes";
 import React from "react";
+import BackgroundNotificationProvider from "@/components/notifications/BackgroundNotificationProvider";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +11,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       enableSystem={false}
       disableTransitionOnChange={false}
     >
-      {children}
+      <BackgroundNotificationProvider>{children}</BackgroundNotificationProvider>
     </ThemeProvider>
   );
 }

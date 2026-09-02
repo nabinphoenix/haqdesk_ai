@@ -192,7 +192,8 @@ export default function KnowledgeBase() {
         if (selectedDoc?.id === confirmDeleteDocId) setSelectedDoc(null);
         toast.success("Document deleted successfully");
       } else {
-        toast.error("Failed to delete document.");
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail || "Failed to delete document.");
       }
     } catch {
       toast.error("Error deleting document. Please try again.");

@@ -949,11 +949,11 @@ export default function ChatWindow({
                                 <button
                                     onClick={handleSend}
                                     disabled={(!input.trim() && !attachedFile) || sending}
-                                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-foreground text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-slate-950 dark:text-white text-[12px] font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                                     style={{ background: pColor, boxShadow: `0 4px 15px ${pColor}40` }}
                                 >
                                     {sending ? (
-                                        <div className="w-3.5 h-3.5 border-2 border-on-accent/30 border-t-white rounded-full animate-spin" />
+                                        <div className="w-3.5 h-3.5 border-2 border-slate-950/30 border-t-slate-950 dark:border-white/30 dark:border-t-white rounded-full animate-spin" />
                                     ) : (
                                         <Send size={13} strokeWidth={2.5} />
                                     )}

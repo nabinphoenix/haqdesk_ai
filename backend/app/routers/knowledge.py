@@ -1,5 +1,6 @@
 import re
 import hashlib
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -10,12 +11,13 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, get_db
 from app.core.config import settings
 from app.core.dependencies import get_current_user, require_business_admin
-from app.models.knowledge import KnowledgeDocument, KnowledgeChunk, KnowledgeIngestionJob
+from app.models.knowledge import AgentReplyFeedback, KnowledgeDocument, KnowledgeChunk, KnowledgeIngestionJob
 from app.models.user import User
 from app.services.rag_service import rag_service
 from app.services.knowledge_ingestion import run_ingestion_job
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+logger = logging.getLogger("uvicorn")
 
 
 def knowledge_storage_path(
@@ -202,9 +204,29 @@ def delete_document(
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
-    rag_service.delete_document_chunks(document_id, business_id, db)
-    if doc.storage_path:
-        stored_file = Path(doc.storage_path)
+    stored_file = Path(doc.storage_path) if doc.storage_path else None
+    try:
+        rag_service.delete_document_chunks(document_id, business_id, db)
+        # Do not rely solely on database-level ON DELETE actions: older
+        # installations may have created these tables without the cascade.
+        db.query(KnowledgeIngestionJob).filter(
+            KnowledgeIngestionJob.document_id == document_id,
+            KnowledgeIngestionJob.business_id == business_id,
+        ).delete(synchronize_session=False)
+        db.query(AgentReplyFeedback).filter(
+            AgentReplyFeedback.knowledge_document_id == document_id,
+            AgentReplyFeedback.business_id == business_id,
+        ).update(
+            {AgentReplyFeedback.knowledge_document_id: None},
+            synchronize_session=False,
+        )
+        db.delete(doc)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not delete the document.") from exc
+
+    if stored_file:
         expected_parent = knowledge_storage_path(
             business_id, document_id, doc.filename
         ).parent.resolve()
@@ -213,9 +235,7 @@ def delete_document(
             if resolved_file.parent == expected_parent and resolved_file.exists():
                 resolved_file.unlink()
         except OSError:
-            pass
-    db.delete(doc)
-    db.commit()
+            logger.warning("Could not remove stored document file for document %s", document_id)
     return {"message": "Document deleted successfully."}
 
 

@@ -39,7 +39,7 @@ function cacheProfileImage(image: string | null) {
 }
 const ALL_NAV_ITEMS = [
   { name: "Inbox", path: "/inbox", roles: ["business_admin", "supervisor", "agent"], icon: Inbox },
-  { name: "Messages", path: "/messages", roles: ["business_admin", "supervisor", "agent"], icon: MessageSquare },
+  { name: "Messages", path: "/messages", roles: ["business_admin", "supervisor", "agent", "super_admin"], icon: MessageSquare },
   { name: "Knowledge", path: "/knowledge", roles: ["business_admin"], icon: BookOpen },
   { name: "Team", path: "/team", roles: ["business_admin", "supervisor"], icon: Users },
   { name: "Analytics", path: "/analytics", roles: ["business_admin", "supervisor"], icon: BarChart3 },
@@ -72,15 +72,6 @@ export default function AppNavbar() {
     const savedImage = readCachedProfileImage();
     if (savedImage) setProfileImage(savedImage);
   }, []);
-
-  useEffect(() => {
-    // Prefer the clean default avatar in the shared navigation. It avoids
-    // broken remote images and stale cached image data on every account.
-    if (profileImage) {
-      setProfileImage(null);
-      cacheProfileImage(null);
-    }
-  }, [profileImage]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -117,6 +108,9 @@ export default function AppNavbar() {
                 if (data.avatar_url) {
                   setProfileImage(data.avatar_url);
                   cacheProfileImage(data.avatar_url);
+                } else {
+                  setProfileImage(null);
+                  cacheProfileImage(null);
                 }
                 if (data.name) {
                   setUserName(data.name);
@@ -452,22 +446,28 @@ export default function AppNavbar() {
             <button
               onClick={async () => {
                 const nameInput = document.getElementById("profile-name-input") as HTMLInputElement;
-                let newName = userName;
-                if (nameInput?.value) {
-                  newName = nameInput.value;
-                  setUserName(newName);
-                  localStorage.setItem("userName", newName);
-                }
+                const newName = nameInput?.value?.trim() || userName;
 
                 try {
-                  await fetchWithAuth("/api/v1/auth/me", {
+                  const response = await fetchWithAuth("/api/v1/auth/me", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       name: newName,
-                      avatar_url: profileImage
+                      avatar_url: profileImage || null
                     }),
                   });
+                  if (!response.ok) throw new Error("Profile update failed");
+                  const savedProfile = await response.json().catch(() => ({}));
+                  const savedAvatar = typeof savedProfile.avatar_url === "string"
+                    ? savedProfile.avatar_url
+                    : profileImage;
+                  setProfileImage(savedAvatar || null);
+                  if (newName) {
+                    setUserName(newName);
+                    localStorage.setItem("userName", newName);
+                  }
+                  cacheProfileImage(savedAvatar || null);
                 } catch (e) {
                   console.error("Failed to update profile", e);
                 }

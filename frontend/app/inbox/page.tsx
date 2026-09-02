@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import ChatWindow from "@/components/chat/ChatWindow";
 import CustomerSidebar from "@/components/chat/CustomerSidebar";
@@ -20,6 +20,10 @@ import {
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+    INBOX_CONVERSATIONS_UPDATED_EVENT,
+    useBackgroundNotifications,
+} from "@/components/notifications/BackgroundNotificationProvider";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Conversation {
@@ -36,6 +40,19 @@ interface Conversation {
     priority?: string;
     deleted_at?: string | null;
 }
+
+type ConversationPayload = {
+    id: number;
+    customer_name: string;
+    customer_email?: string;
+    customer_id: string;
+    last_message: string;
+    time: string;
+    status: string;
+    platform: string;
+    unread?: number;
+    priority?: string;
+};
 
 // ── Platform config ────────────────────────────────────────────────────────────
 const PLATFORM_CONFIG = {
@@ -135,11 +152,7 @@ export default function InboxPage() {
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformKey>("all");
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
-    const selectedConvIdRef = useRef<number | null>(null);
-
-    useEffect(() => {
-        selectedConvIdRef.current = selectedConvId;
-    }, [selectedConvId]);
+    const { setActiveConversationId } = useBackgroundNotifications();
     const [search, setSearch] = useState("");
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -153,23 +166,10 @@ export default function InboxPage() {
     const [aiMode, setAiMode] = useState<"auto" | "review">("review");
     const [isLoading, setIsLoading] = useState(true);
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const previousMessageCountRef = useRef<Map<number, string>>(new Map());
-
     useEffect(() => {
-        audioRef.current = new Audio("/audio/sound_notification_haqdeskAI.mp3");
-        audioRef.current.volume = 0.6;
-    }, []);
-
-    const playNotificationSound = useCallback(() => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch((err) => {
-                console.warn("Audio play blocked or failed:", err);
-            });
-        }
-    }, []);
+        setActiveConversationId(selectedConvId);
+        return () => setActiveConversationId(null);
+    }, [selectedConvId, setActiveConversationId]);
 
     const fetchAiMode = useCallback(async () => {
         try {
@@ -206,6 +206,21 @@ export default function InboxPage() {
         }
     };
 
+    const applyConversationData = useCallback((data: ConversationPayload[]) => {
+        const mappedData = data.map((c) => ({
+            ...c,
+            rawTime: c.time,
+            time: relativeTime(c.time),
+            unread: c.unread ?? 0,
+        }));
+
+        setConversations(prev => {
+            const isDifferent = JSON.stringify(prev.map(p => ({ id: p.id, last_message: p.last_message, unread: p.unread, status: p.status, rawTime: p.rawTime }))) !==
+                                 JSON.stringify(mappedData.map((d) => ({ id: d.id, last_message: d.last_message, unread: d.unread, status: d.status, rawTime: d.rawTime })));
+            return isDifferent ? mappedData : prev;
+        });
+    }, []);
+
     const fetchConversations = useCallback(async () => {
         try {
             const response = await fetchWithAuth(
@@ -226,58 +241,14 @@ export default function InboxPage() {
                 return;
             }
 
-            const data = await response.json();
-            console.log("Conversations response:", data);
-            
-            // Detect new incoming customer messages for sound notification
-            data.forEach((conv: any) => {
-                const key = Number(conv.id);
-                const prevTime = previousMessageCountRef.current.get(key);
-                const currentTime = conv.time;
-
-                const isFirstLoad = prevTime === undefined;
-                const hasNewActivity = !isFirstLoad && prevTime !== currentTime;
-
-                const isFromCustomer = conv.last_message_sender_type === "customer";
-                const isCurrentlyOpenConversation = conv.id === selectedConvIdRef.current;
-
-                if (hasNewActivity && isFromCustomer && !isCurrentlyOpenConversation) {
-                    // Something changed in this conversation since last poll — play sound and show toast
-                    playNotificationSound();
-                    
-                    // Show a toast notification
-                    const previewText = conv.last_message || "New message received";
-                    const senderName = conv.customer_name || "Customer";
-                    toast.info(`New message from ${senderName}`, {
-                        description: previewText.substring(0, 50) + (previewText.length > 50 ? "..." : ""),
-                        duration: 5000,
-                        action: {
-                            label: "View",
-                            onClick: () => setSelectedConvId(conv.id)
-                        }
-                    });
-                }
-                previousMessageCountRef.current.set(key, currentTime);
-            });
-
-            const mappedData = data.map((c: any) => ({
-                ...c,
-                rawTime: c.time,
-                time: relativeTime(c.time),
-                unread: c.unread ?? 0,
-            }));
-
-            setConversations(prev => {
-                const isDifferent = JSON.stringify(prev.map(p => ({ id: p.id, last_message: p.last_message, unread: p.unread, status: p.status, rawTime: p.rawTime }))) !==
-                                     JSON.stringify(mappedData.map((d: any) => ({ id: d.id, last_message: d.last_message, unread: d.unread, status: d.status, rawTime: d.rawTime })));
-                return isDifferent ? mappedData : prev;
-            });
+            const data = await response.json() as ConversationPayload[];
+            applyConversationData(data);
         } catch (e) {
             console.error("Failed to fetch conversations:", e);
         } finally {
             setIsLoading(false);
         }
-    }, [router, playNotificationSound]);
+    }, [router, applyConversationData]);
 
     const fetchDeletedConversations = useCallback(async () => {
         try {
@@ -300,18 +271,29 @@ export default function InboxPage() {
         fetchConversations();
         fetchDeletedConversations();
         fetchAiMode();
-        
-        const interval = setInterval(fetchConversations, 3000);
+
+        const handleConversationUpdate = (event: Event) => {
+            const data = (event as CustomEvent<ConversationPayload[]>).detail;
+            if (Array.isArray(data)) applyConversationData(data);
+        };
+        window.addEventListener(INBOX_CONVERSATIONS_UPDATED_EVENT, handleConversationUpdate);
+
+        const handleOpenConversation = (event: Event) => {
+            const conversationId = (event as CustomEvent<number>).detail;
+            if (Number.isFinite(conversationId)) setSelectedConvId(conversationId);
+        };
+        window.addEventListener("haqdesk:open-conversation", handleOpenConversation);
         
         // Listen for link events to immediately refresh list
         const handleLinkEvent = () => fetchConversations();
         window.addEventListener('customerLinked', handleLinkEvent);
         
         return () => {
-            clearInterval(interval);
+            window.removeEventListener(INBOX_CONVERSATIONS_UPDATED_EVENT, handleConversationUpdate);
+            window.removeEventListener("haqdesk:open-conversation", handleOpenConversation);
             window.removeEventListener('customerLinked', handleLinkEvent);
         };
-    }, [router, fetchConversations, fetchDeletedConversations, fetchAiMode]);
+    }, [router, fetchConversations, fetchDeletedConversations, fetchAiMode, applyConversationData]);
 
     const handleDeleteConversation = (conversationId: number) => {
         setConfirmDeleteId(conversationId);

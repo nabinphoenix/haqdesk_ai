@@ -324,10 +324,15 @@ async def update_current_user(
 ):
     if payload.name is not None:
         current_user.name = payload.name
-    if payload.avatar_url is not None:
+    if "avatar_url" in payload.model_fields_set:
         current_user.avatar_url = payload.avatar_url
     db.commit()
-    return {"status": "success", "message": "Profile updated"}
+    db.refresh(current_user)
+    return {
+        "status": "success",
+        "message": "Profile updated",
+        "avatar_url": current_user.avatar_url,
+    }
 
 
 @router.post('/presence')

@@ -498,6 +498,22 @@ class RAGService:
                 e,
             )
 
+        if db is not None and chunks:
+            # A vector cleanup can be unavailable while the database delete
+            # still succeeds. Keep stale Qdrant points from affecting answers.
+            valid_chunk_ids = {
+                row[0]
+                for row in db.query(KnowledgeChunk.id)
+                .join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeChunk.document_id)
+                .filter(
+                    KnowledgeChunk.business_id == business_id,
+                    KnowledgeDocument.business_id == business_id,
+                    KnowledgeDocument.status == "ready",
+                )
+                .all()
+            }
+            chunks = [chunk for chunk in chunks if chunk.get("chunk_id") in valid_chunk_ids]
+
         vector_score = max(
             (float(chunk.get("similarity") or 0) for chunk in chunks),
             default=0.0,
@@ -759,23 +775,25 @@ class RAGService:
 
         chunk_ids = [c.id for c in chunks]
 
-        if chunk_ids and self._collection_exists(business_id):
+        if chunk_ids:
             try:
-                from qdrant_client.models import PointIdsList
-                self.qdrant.delete(
-                    collection_name=self.collection_name_for_business(business_id),
-                    points_selector=PointIdsList(points=chunk_ids)
-                )
-                logger.info(f"[RAG] Deleted {len(chunk_ids)} points from Qdrant")
+                if self._collection_exists(business_id):
+                    from qdrant_client.models import PointIdsList
+                    self.qdrant.delete(
+                        collection_name=self.collection_name_for_business(business_id),
+                        points_selector=PointIdsList(points=chunk_ids)
+                    )
+                    logger.info(f"[RAG] Deleted {len(chunk_ids)} points from Qdrant")
             except Exception as e:
-                logger.error(f"[RAG] Failed to delete from Qdrant: {e}")
-                raise
+                # Database deletion must remain available if the vector
+                # service is temporarily unavailable. A later re-index or
+                # collection cleanup can remove any orphaned vectors.
+                logger.warning(f"[RAG] Qdrant cleanup skipped for document {document_id}: {e}")
 
         db.query(KnowledgeChunk).filter(
             KnowledgeChunk.document_id == document_id,
             KnowledgeChunk.business_id == business_id,
-        ).delete()
-        db.commit()
+        ).delete(synchronize_session=False)
 
     def update_chunk_embedding(
         self, chunk_id: int, new_content: str, business_id: int, db: Session
