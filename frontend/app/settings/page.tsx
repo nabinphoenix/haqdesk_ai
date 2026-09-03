@@ -9,10 +9,10 @@ import PasswordField from "@/components/ui/PasswordField";
 import { useRouter } from "next/navigation";
 
 const tabs = [
-  { id: "business", label: "Business Profile", icon: Building2 },
-  { id: "integrations", label: "Integrations", icon: Link2 },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "security", label: "Security", icon: Shield },
+  { id: "business", label: "Business Profile", description: "Company details and AI", icon: Building2 },
+  { id: "integrations", label: "Integrations", description: "Connected channels", icon: Link2 },
+  { id: "notifications", label: "Notifications", description: "Alerts and preferences", icon: Bell },
+  { id: "security", label: "Security", description: "Password and access", icon: Shield },
 ];
 
 export default function SettingsPage() {
@@ -201,33 +201,58 @@ export default function SettingsPage() {
         </header>
 
         <div className="page-body custom-scrollbar">
-          <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
 
             {/* Sidebar */}
-            <div className="lg:w-56 shrink-0">
-              <div className="rounded-[2rem] border border-surface-border bg-surface-wash p-3 space-y-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[12px] font-bold transition-all text-left ${
-                        activeTab === tab.id
-                          ? "bg-accent/20 text-accent-glow border border-accent/30"
-                          : "text-muted-foreground hover:bg-surface-wash hover:text-foreground"
-                      }`}
-                    >
-                      <Icon size={15} />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+            <div className="lg:w-64 shrink-0">
+              <div className="lg:sticky lg:top-6 rounded-2xl border border-surface-border bg-surface p-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                <div className="hidden lg:block px-3 pt-2 pb-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground">Settings navigation</p>
+                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Configure your workspace</p>
+                </div>
+
+                <div className="flex lg:flex-col gap-1.5 overflow-x-auto pb-0.5 lg:overflow-visible">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-pressed={isActive}
+                        className={`group flex min-w-[172px] lg:min-w-0 flex-1 lg:flex-none items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all duration-150 ${
+                          isActive
+                            ? "border-accent/30 bg-accent/10 text-accent shadow-sm dark:text-accent-glow"
+                            : "border-transparent text-muted-foreground hover:border-surface-border hover:bg-surface-wash hover:text-foreground"
+                        }`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                          isActive
+                            ? "bg-accent text-on-accent shadow-sm"
+                            : "bg-surface-wash text-muted-foreground group-hover:text-foreground"
+                        }`}>
+                          <Icon size={16} strokeWidth={2} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px] font-bold">{tab.label}</span>
+                          <span className={`mt-0.5 block truncate text-[10px] font-medium ${
+                            isActive ? "text-accent/80 dark:text-accent-glow/80" : "text-muted-foreground"
+                          }`}>
+                            {tab.description}
+                          </span>
+                        </span>
+                        {isActive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Content panel */}
-            <div className="flex-1 rounded-[2rem] border border-surface-border bg-surface-wash p-8">
+            <div className="min-w-0 flex-1 rounded-[2rem] border border-surface-border bg-surface-wash p-5 sm:p-8">
 
               {activeTab === "business" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
