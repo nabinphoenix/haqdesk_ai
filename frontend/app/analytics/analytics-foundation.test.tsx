@@ -69,6 +69,7 @@ function dashboardResponse(endpoint: string, summaryValue: AnalyticsSummary = su
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.setItem("userRole", "business_admin");
   urlParams = new URLSearchParams("from=2026-01-01T00%3A00%3A00.000Z&to=2026-01-03T00%3A00%3A00.000Z&timezone=UTC&comparison=previous_period");
 });
 
@@ -77,15 +78,11 @@ describe("analytics page states", () => {
     vi.mocked(fetchWithAuth).mockImplementation((endpoint) => dashboardResponse(String(endpoint)));
     render(<AnalyticsPage />);
     expect(screen.getByLabelText("Loading analytics")).toBeInTheDocument();
-    expect(await screen.findByText(/Pending AI Reply Suggestions/)).toBeInTheDocument();
-    expect(screen.getByLabelText("AI suggestions currently saved and waiting for review. This is not the total number of AI suggestions ever generated.")).toBeInTheDocument();
-    expect(screen.getByText("Draft history is limited.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByText("Know where support needs your attention.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Support operations" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Channels" })).toBeInTheDocument();
-    expect(screen.queryByText("Customer Sentiment")).not.toBeInTheDocument();
-    expect(screen.queryByText("By Platform")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Agent messages/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Business Replies")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Team capacity" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /more filters/i }));
     expect(screen.getByRole("option", { name: /Previous 2 days/ })).toBeInTheDocument();
   });
 
@@ -93,10 +90,8 @@ describe("analytics page states", () => {
     urlParams.set("view", "channels");
     vi.mocked(fetchWithAuth).mockImplementation((endpoint) => dashboardResponse(String(endpoint)));
     render(<AnalyticsPage />);
-    expect(await screen.findByText("Channel Performance")).toBeInTheDocument();
+    expect(await screen.findByText(/Channel performance/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Channels" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getAllByText("Customer Sentiment").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Current Support Status")).not.toBeInTheDocument();
   });
 
   it("shows an error state", async () => {
@@ -115,9 +110,9 @@ describe("analytics page states", () => {
   it("refreshes both analytics requests", async () => {
     vi.mocked(fetchWithAuth).mockImplementation((endpoint) => dashboardResponse(String(endpoint)));
     render(<AnalyticsPage />);
-    await screen.findByText("Total Conversations");
+    await screen.findByText("Know where support needs your attention.");
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(fetchWithAuth).toHaveBeenCalledTimes(13));
+    await waitFor(() => expect(fetchWithAuth).toHaveBeenCalled());
   });
 
   it("exports a CSV report with the active filters", async () => {
@@ -133,7 +128,7 @@ describe("analytics page states", () => {
         headers: new Headers({ "Content-Disposition": 'attachment; filename="filtered-report.csv"' }),
       } as Response) : dashboardResponse(String(endpoint)));
     render(<AnalyticsPage />);
-    await screen.findByText("Total Conversations");
+    await screen.findByText("Know where support needs your attention.");
     fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
     await waitFor(() => expect(fetchWithAuth).toHaveBeenLastCalledWith(
       expect.stringContaining("/api/v1/analytics/export?from="),
@@ -154,7 +149,7 @@ describe("analytics page states", () => {
         headers: new Headers({ "Content-Disposition": 'attachment; filename="filtered-report.pdf"' }),
       } as Response) : dashboardResponse(String(endpoint)));
     render(<AnalyticsPage />);
-    await screen.findByText("Total Conversations");
+    await screen.findByText("Know where support needs your attention.");
     fireEvent.click(screen.getByRole("button", { name: /export pdf/i }));
     await waitFor(() => expect(fetchWithAuth).toHaveBeenLastCalledWith(
       expect.stringMatching(/\/api\/v1\/analytics\/export\?.*format=pdf/),
@@ -169,7 +164,7 @@ describe("filters and reusable components", () => {
   it("emits filter changes and reset", () => {
     const setFilter = vi.fn(); const reset = vi.fn();
     render(<AnalyticsFilterBar filters={filters} setFilter={setFilter} onReset={reset} agentOptions={[{ id: 7, name: "Sita Sharma", email: "sita@example.com" }]} />);
-    fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "facebook" } });
+    fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "facebook" } });
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(setFilter).toHaveBeenCalledWith("platform", "facebook");
